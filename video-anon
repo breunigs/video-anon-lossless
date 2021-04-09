@@ -1,0 +1,152 @@
+#!/usr/bin/env ruby
+
+require 'json'
+require 'etc'
+
+require 'formatador'
+require 'pry'
+require 'thread/pool'
+
+PROCESS_DIR = "/videos"
+TMP_DIR = File.join(PROCESS_DIR, "video-anon-lossless-workdir")
+PROCESSED_SUFFIX = "_anonymized.mkv"
+
+ANONYIMZER_DIR = "/app/anonymizer/anonymizer"
+
+def fps(video)
+  `nice -n20 ffprobe -v quiet -show_streams -select_streams v:0 "#{video}"`.match(/^r_frame_rate=([\/0-9]+)/)[1]
+end
+
+def extract(video, to)
+  expected_frames = `nice -n20 ffmpeg -hide_banner -i "#{video}" -map 0:v:0 -c copy -f null - 2>&1`.match(/^frame=\s*(\d+) /)[1].to_i - 1
+  puts "…expecting #{expected_frames} frames"
+
+  found = Dir.glob(File.join(to, "*.bmp"))
+  if found.size == expected_frames \
+      && found.include?(File.join(to, "1.bmp")) \
+      && found.include?(File.join(to, "#{expected_frames}.bmp"))
+    puts "…which are present, skipping extraction"
+    return false
+  end
+
+  FileUtils.rm_rf(to)
+  FileUtils.mkdir_p(to)
+
+  exit(1) unless system(
+    "nice", "-n20",
+    "ffmpeg", "-hide_banner", "-loglevel", "error", "-stats",
+    "-i", video, File.join(to, "%d.bmp")
+  )
+  return true
+end
+
+def detect(source_img, target_json)
+  Dir.chdir(ANONYIMZER_DIR) do
+    exit(1) unless system(
+      # {"PYTHONPATH" => "#{ENV["PYTHONPATH"]}:#{ANONYIMZER_DIR}/.."},
+      "nice", "-n20",
+      "asdf", "exec", "python",
+      File.join(ANONYIMZER_DIR, "bin/anonymize.py"),
+      "--input", source_img,
+      "--image-output", target_json,
+      "--weights", ENV["WEIGHTS_CACHE"],
+      "--image-extensions", "bmp"
+    )
+  end
+end
+
+def blur(json_dir, img_dir)
+  files = Dir.glob(File.join(json_dir, "*.json"))
+  pool = Thread.pool(Etc.nprocessors - 1)
+  pg = Formatador::ProgressBar.new(files.size)
+  files.each do |json|
+    pool.process do
+      name = File.basename(json, ".json")
+      img = File.join(img_dir, "#{name}.bmp")
+
+      blur_single(json, img)
+      pg.increment
+    end
+  end
+
+  pool.shutdown
+  puts
+end
+
+def blur_single(json, img)
+  detects = JSON.parse(File.read(json))
+  return if detects.empty?
+
+  blurs = detects.flat_map do |args|
+    {0 => "0x15", 2 => "0x4", 4 => "0x2", 7 => "0x1"}.flat_map do |extra, blur|
+      x = args["x_min"] - extra
+      y = args["y_min"] - extra
+      w = (args["x_max"] + extra - x)
+      h = (args["y_max"] + extra - y)
+
+      [
+        "-region", "#{w.round}x#{h.round}+#{x.round}+#{y.round}",
+        (args["kind"] == "plate" ? "-motion-blur" : "-blur"), blur,
+      ]
+    end
+  end
+  exit(1) unless system("nice", "-n20", "mogrify", *blurs, "-quality", "10", img)
+end
+
+def join(source_video, img_dir, target)
+  exit(1) unless system(
+    "ffmpeg", "-hide_banner", "-loglevel", "error", "-stats",
+    "-r", fps(source_video),
+    "-i", File.join(img_dir, "%d.bmp"),
+    "-c:v", "ffv1", "-qscale:v", "0",
+    target)
+end
+
+videos = Dir.glob(File.join(PROCESS_DIR, "*.{mp4,mkv}"), File::FNM_CASEFOLD).reject do |video|
+  video.end_with?(PROCESSED_SUFFIX) || File.exist?("#{video}#{PROCESSED_SUFFIX}")
+end
+
+if videos.empty?
+  warn <<~DOC
+    No videos, or no new videos found. Did you add some?
+
+    Usage:
+    cd dir/with/videos
+    docker run --rm -it --name video-anon --mount type=bind,source=$(pwd),target=/videos video-anon
+  DOC
+  exit 1
+end
+
+exit(1) unless system("asdf", "global", "python", ENV["PYTHON_VERSION"])
+
+videos.each do |video|
+  name = File.basename(video)
+  target_video_path = "#{video}#{PROCESSED_SUFFIX}"
+  raise "#{target_video_path} already exists" if File.exists?(target_video_path)
+
+  workdir = File.join(TMP_DIR, name)
+
+  FileUtils.mkdir_p(workdir)
+  Dir.chdir(workdir)
+
+  raw_dir = File.join(workdir, "raw")
+  json_dir = File.join(workdir, "json")
+
+  Formatador.display_line("\n\n[bold]Extracting video stills[/]: #{video}")
+  fresh = extract(video, raw_dir)
+
+  Formatador.display_line("\n\n[bold]Detecting faces and plates[/]: #{video}")
+  FileUtils.rm_rf(json_dir) if fresh && Dir.exist?(json_dir)
+  FileUtils.mkdir_p(json_dir)
+  detect(raw_dir, json_dir)
+
+  Formatador.display_line("\n\n[bold]Blurring[/]: #{video}")
+  blur(json_dir, raw_dir)
+
+  Formatador.display_line("\n\n[bold]Joining[/]: #{video}")
+  join(video, raw_dir, target_video_path)
+
+  FileUtils.rm_rf(workdir)
+end
+
+Dir.rmdir(TMP_DIR) rescue nil

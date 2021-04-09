@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -eu
+
+docker build -t video-anon $(dirname "$0")
+
+echo "\n\n"
+
+docker run --rm -it --name video-anon \
+  -u $(id -u ${USER}):$(id -g ${USER}) \
+  --mount type=bind,source=$(pwd),target=/videos \
+  video-anon

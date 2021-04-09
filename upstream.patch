@@ -1,0 +1,46 @@
+From 726da0cd721db5baee5c43bc02d6b30b1baead81 Mon Sep 17 00:00:00 2001
+From: Stefan Breunig <stefan-github@yrden.de>
+Date: Fri, 9 Apr 2021 23:10:42 +0200
+Subject: [PATCH] lossless video patches
+
+---
+ anonymizer/anonymization/anonymizer.py | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
+index 5f113d1..d5bd08c 100644
+--- a/anonymizer/anonymization/anonymizer.py
++++ b/anonymizer/anonymization/anonymizer.py
+@@ -1,4 +1,5 @@
+ import json
++import os
+ from pathlib import Path
+ 
+ import numpy as np
+@@ -44,7 +45,7 @@ def anonymize_image(self, image, detection_thresholds):
+         for kind, detector in self.detectors.items():
+             new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
+             detected_boxes.extend(new_boxes)
+-        return self.obfuscator.obfuscate(image, detected_boxes), detected_boxes
++        return detected_boxes
+ 
+     def anonymize_images(self, input_path, output_path, detection_thresholds, file_types, write_json):
+         print(f'Anonymizing images in {input_path} and saving the anonymized images to {output_path}...')
+@@ -62,10 +63,12 @@ def anonymize_images(self, input_path, output_path, detection_thresholds, file_t
+             (Path(output_path) / relative_path.parent).mkdir(exist_ok=True, parents=True)
+             output_image_path = Path(output_path) / relative_path
+             output_detections_path = (Path(output_path) / relative_path).with_suffix('.json')
++            if os.path.isfile(output_detections_path):
++                continue
+ 
+             # Anonymize image
+             image = load_np_image(str(input_image_path))
+-            anonymized_image, detections = self.anonymize_image(image=image, detection_thresholds=detection_thresholds)
+-            save_np_image(image=anonymized_image, image_path=str(output_image_path))
++            detections = self.anonymize_image(image=image, detection_thresholds=detection_thresholds)
++
+             if write_json:
+                 save_detections(detections=detections, detections_path=str(output_detections_path))
+-- 
+2.30.2
+
