@@ -8,5 +8,5 @@ echo "\n\n"
 
 docker run --rm -it --name video-anon \
   -u $(id -u ${USER}):$(id -g ${USER}) \
-  --mount type=bind,source=$(pwd),target=/videos \
+  --mount type=bind,source=$(pwd),target=/data \
   video-anon
