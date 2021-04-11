@@ -1,19 +1,20 @@
-From 5873a0c27b1101f3476aebb959b748f5a9a67baf Mon Sep 17 00:00:00 2001
+From 55d020d6a1683e3c3ec6273fb7fc96576a1100fe Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 138 +++++++++++++++++++++----
- anonymizer/bin/anonymize.py            |  42 +++-----
+ anonymizer/anonymization/anonymizer.py | 159 +++++++++++++++++++++----
+ anonymizer/bin/anonymize.py            |  42 +++----
+ anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 3 files changed, 138 insertions(+), 46 deletions(-)
+ 4 files changed, 160 insertions(+), 53 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..4a68e65 100644
+index 5f113d1..520f6fe 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
-@@ -1,9 +1,16 @@
+@@ -1,14 +1,33 @@
 -import json
 -from pathlib import Path
 -
@@ -24,7 +25,7 @@ index 5f113d1..4a68e65 100644
 +import imageio.plugins.ffmpeg
 +import imageio
  from tqdm import tqdm
-+from PIL import Image
++from PIL import Image, ExifTags
 +import numpy as np
 +from pathlib import Path
 +import json
@@ -35,7 +36,26 @@ index 5f113d1..4a68e65 100644
  
  
  def load_np_image(image_path):
-@@ -32,10 +39,53 @@ def save_detections(detections, detections_path):
+-    image = Image.open(image_path).convert('RGB')
+-    np_image = np.array(image)
++    image = Image.open(image_path)
++    try:
++        exif = dict((ExifTags.TAGS[k], v) for k, v in image._getexif().items() if k in ExifTags.TAGS)
++        print(image._getexif().items())
++        if exif['Orientation'] == 3:
++            image = image.rotate(180, expand=True)
++        elif exif['Orientation'] == 6:
++            image = image.rotate(270, expand=True)
++        elif exif['Orientation'] == 8:
++            image = image.rotate(90, expand=True)
++    except:
++        print(f"probably not a jpg: {image_path}")
++
++    np_image = np.array(image.convert('RGB'))
+     return np_image
+ 
+ 
+@@ -32,10 +51,53 @@ def save_detections(detections, detections_path):
          json.dump(json_output, output_file, indent=2)
  
  
@@ -91,7 +111,7 @@ index 5f113d1..4a68e65 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +94,78 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +106,81 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -118,12 +138,16 @@ index 5f113d1..4a68e65 100644
 +            else:
 +                detections = self.anonymize_image(image=frame, detection_thresholds=detection_thresholds)
 +                save_detections(detections=detections, detections_path=str(output_detections_path))
-+
+ 
+-    def anonymize_images(self, input_path, output_path, detection_thresholds, file_types, write_json):
+-        print(f'Anonymizing images in {input_path} and saving the anonymized images to {output_path}...')
 +            frame = blur_with_imagemagick(frame, detections)
 +            writer.append_data(frame)
-+
+ 
+-        Path(output_path).mkdir(exist_ok=True)
+-        assert Path(output_path).is_dir(), 'Output path must be a directory'
 +            bar.update()
-+
+ 
 +        writer.close()
 +        bar.close()
 +
@@ -139,20 +163,16 @@ index 5f113d1..4a68e65 100644
 +            video_out_path = (Path(input_path) / relative_path).with_name(f"{video.name}.anonymized.mkv")
 +            json_out_path = (Path(input_path) / relative_path).with_name(f'{video.name}_jsons')
 +            json_out_path.mkdir(parents=True, exist_ok=True)
- 
--    def anonymize_images(self, input_path, output_path, detection_thresholds, file_types, write_json):
--        print(f'Anonymizing images in {input_path} and saving the anonymized images to {output_path}...')
++
 +            with tempfile.TemporaryDirectory(prefix=video.name, dir=input_path) as tmp_dir:
 +                tmp_path = Path(tmp_dir) / video_out_path.name
 +                self.anonymize_video(video, detection_thresholds, tmp_path, json_out_path)
 +                tmp_path.rename(video_tmp_path)
- 
--        Path(output_path).mkdir(exist_ok=True)
--        assert Path(output_path).is_dir(), 'Output path must be a directory'
++
 +            if not write_json:
 +                rmtree(json_out_path)
 +            bar.close()
- 
++
 +    def anonymize_images(self, input_path, detection_thresholds, file_types, write_json):
          files = []
          for file_type in file_types:
@@ -167,23 +187,27 @@ index 5f113d1..4a68e65 100644
 -            (Path(output_path) / relative_path.parent).mkdir(exist_ok=True, parents=True)
 -            output_image_path = Path(output_path) / relative_path
 -            output_detections_path = (Path(output_path) / relative_path).with_suffix('.json')
-+            output_image_path = Path(input_path) / relative_path
++            output_image_path = (Path(input_path) / relative_path).with_suffix(".anonymized.png")
 +            output_detections_path = (Path(input_path) / relative_path).with_suffix('.json')
-+            if output_detections_path.exists():
++            if output_image_path.exists():
 +                continue
  
-             # Anonymize image
+-            # Anonymize image
              image = load_np_image(str(input_image_path))
 -            anonymized_image, detections = self.anonymize_image(image=image, detection_thresholds=detection_thresholds)
 -            save_np_image(image=anonymized_image, image_path=str(output_image_path))
-+            detections = self.anonymize_image(image=image, detection_thresholds=detection_thresholds)
-+            image = blur_with_imagemagick(frame, detections)
-+            with open(output_image_path, 'wb') as output_file:
-+                output_file.write(image)
++
++            if (output_detections_path).exists():
++                detections = load_detections(detections_path=str(output_detections_path))
++            else:
++                detections = self.anonymize_image(image=image, detection_thresholds=detection_thresholds)
++
++            image = blur_with_imagemagick(image, detections)
++            save_np_image(image, output_image_path)
              if write_json:
                  save_detections(detections=detections, detections_path=str(output_detections_path))
 diff --git a/anonymizer/bin/anonymize.py b/anonymizer/bin/anonymize.py
-index 4dbf18c..32fb22a 100644
+index 4dbf18c..553587f 100644
 --- a/anonymizer/bin/anonymize.py
 +++ b/anonymizer/bin/anonymize.py
 @@ -29,16 +29,15 @@ def parse_args():
@@ -200,10 +224,10 @@ index 4dbf18c..32fb22a 100644
                               'appropriate names are found they will be downloaded automatically.')
 -    parser.add_argument('--image-extensions', required=False, default='jpg,png',
 -                        metavar='"jpg,png"',
-+    parser.add_argument('--image-extensions', required=False, default='jpg,png,bmp,jpeg',
++    parser.add_argument('--image-extensions', required=False, default='jpg,jpeg,png,bmp,JPG,JPEG,PNG,BMP',
 +                        metavar='"jpg,png,bmp,jpeg"',
 +                        help='Comma-separated list of file types that will be anonymized')
-+    parser.add_argument('--video-extensions', required=False, default='mp4,mkv',
++    parser.add_argument('--video-extensions', required=False, default='mp4,mkv,MP4,MKV',
 +                        metavar='"mp4,mkv"',
                          help='Comma-separated list of file types that will be anonymized')
      parser.add_argument('--face-threshold', type=float, required=False, default=0.3,
@@ -273,8 +297,31 @@ index 4dbf18c..32fb22a 100644
           face_threshold=args.face_threshold, plate_threshold=args.plate_threshold,
 -         write_json=args.write_detections, obfuscation_parameters=args.obfuscation_kernel)
 +         write_json=args.write_detections)
+diff --git a/anonymizer/detection/detector.py b/anonymizer/detection/detector.py
+index 56ce2e5..6b5f135 100644
+--- a/anonymizer/detection/detector.py
++++ b/anonymizer/detection/detector.py
+@@ -10,14 +10,14 @@ def __init__(self, kind, weights_path):
+ 
+         self.detection_graph = tf.Graph()
+         with self.detection_graph.as_default():
+-            od_graph_def = tf.GraphDef()
+-            with tf.gfile.GFile(weights_path, 'rb') as fid:
++            od_graph_def = tf.compat.v1.GraphDef()
++            with tf.io.gfile.GFile(weights_path, 'rb') as fid:
+                 serialized_graph = fid.read()
+                 od_graph_def.ParseFromString(serialized_graph)
+                 tf.import_graph_def(od_graph_def, name='')
+ 
+-        conf = tf.ConfigProto()
+-        self.session = tf.Session(graph=self.detection_graph, config=conf)
++        conf = tf.compat.v1.ConfigProto()
++        self.session = tf.compat.v1.Session(graph=self.detection_graph, config=conf)
+ 
+     def _convert_boxes(self, num_boxes, scores, boxes, image_height, image_width, detection_threshold):
+         assert detection_threshold >= 0.001, 'Threshold can not be too close to "0".'
 diff --git a/requirements.txt b/requirements.txt
-index 4191dc6..e09f4d6 100644
+index 4191dc6..a41ee02 100644
 --- a/requirements.txt
 +++ b/requirements.txt
 @@ -1,9 +1,11 @@
@@ -282,7 +329,7 @@ index 4191dc6..e09f4d6 100644
  flake8==3.5.0
  numpy==1.15.2
 -tensorflow-gpu==1.11.0
-+tensorflow==1.11.0
++tensorflow==1.15.5
  scipy==1.1.0
  Pillow==5.3.0
  requests==2.20.0

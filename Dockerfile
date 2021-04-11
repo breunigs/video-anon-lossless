@@ -1,42 +1,33 @@
 FROM debian:stable-slim
 
 ENV WEIGHTS_CACHE=/anonymizer-weights-cache
-ENV PYTHON_VERSION=3.6.9
 
 RUN mkdir /app/ ${WEIGHTS_CACHE}
 WORKDIR /app/
 
 RUN apt-get update && apt-get -y install --no-install-recommends \
-  bash \
-  build-essential \
-  ca-certificates \
   coreutils \
-  curl \
   ffmpeg \
   git \
   imagemagick \
-  libssl-dev \
-  zlib1g-dev
+  python3 \
+  python3-pip \
+  python3-setuptools \
+  python3-wheel
 
-# Install asdf, because we need an older Python version than available in Debian buster
-RUN git clone https://github.com/asdf-vm/asdf.git /asdf --branch v0.8.0 --depth 1 && \
-  rm -rf /asdf/.git
-COPY asdf /usr/bin/
-RUN chmod +x /usr/bin/asdf
-ENV ASDF_DIR=/asdf-dir/
-ENV ASDF_DATA_DIR=/asdf-data-dir/
-RUN asdf plugin add python && asdf install python ${PYTHON_VERSION} && asdf global python ${PYTHON_VERSION} && cp ~/.tool-versions /
-
+RUN pip3 install --upgrade pip
 COPY requirements.txt /app/
-RUN asdf exec pip3 install -r requirements.txt
+RUN pip3 install -r requirements.txt
 
 RUN git clone https://github.com/understand-ai/anonymizer.git anonymizer --depth 1 && \
   cd anonymizer && \
   git checkout 2fc7ab3f485621270ea9969297f0878c2a1b415e
 
-# run once to warm weights cache
+ENV TF_XLA_FLAGS="--tf_xla_auto_jit=2 --tf_xla_cpu_global_jit"
 ENV PYTHONPATH=${PYTHONPATH}:/app/anonymizer/
-RUN asdf exec python /app/anonymizer/anonymizer/bin/anonymize.py \
+
+# run once to warm weights cache
+RUN python3 /app/anonymizer/anonymizer/bin/anonymize.py \
   --weights ${WEIGHTS_CACHE} \
   --image-output /data \
   --input /data
@@ -44,7 +35,7 @@ RUN asdf exec python /app/anonymizer/anonymizer/bin/anonymize.py \
 COPY upstream.patch /app/
 RUN cd anonymizer && git apply /app/upstream.patch
 
-ENTRYPOINT nice -n20 asdf exec python \
+ENTRYPOINT nice -n20 python3 \
   /app/anonymizer/anonymizer/bin/anonymize.py \
   --weights ${WEIGHTS_CACHE} \
   --input /data \
