@@ -9,8 +9,8 @@ RUN wget --quiet https://github.com/bazelbuild/bazel/releases/download/0.26.1/ba
 RUN --mount=type=cache,target=/root/.cache/ \
   git checkout r1.15 && \
   ./configure && \
-  bazel build --config=opt --config=noaws --config=nogcp --config=nohdfs --config=nonccl //tensorflow/tools/pip_package:build_pip_package --config=v1 && \
-  ./bazel-bin/tensorflow/tools/pip_package/build_pip_package /
+  nice -n20 bazel build --config=opt --config=noaws --config=nogcp --config=nohdfs --config=nonccl //tensorflow/tools/pip_package:build_pip_package --config=v1 && \
+  nice -n20 ./bazel-bin/tensorflow/tools/pip_package/build_pip_package /
 
 
 FROM tensorflow/tensorflow:devel
