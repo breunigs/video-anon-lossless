@@ -1,4 +1,4 @@
-From 40f87e0ea70d4d30158c893791c5a9a4f1790002 Mon Sep 17 00:00:00 2001
+From 42ff0b88f79427c2a6d3bd3c8e58784c9e01b7f4 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
@@ -11,7 +11,7 @@ Subject: [PATCH] hack it together
  4 files changed, 160 insertions(+), 53 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..7d00af5 100644
+index 5f113d1..168c0e2 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,33 @@
@@ -127,7 +127,7 @@ index 5f113d1..7d00af5 100644
 +
 +        writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer = imageio.get_writer(
 +            video_out, format='FFMPEG', mode='I', fps=meta['fps'], codec="ffv1",
-+            quality=None)
++            quality=None, movflags="frag_keyframe+empty_moov")
 +
 +        bar = tqdm(dynamic_ncols=True, total=nframes, position=1, leave=True, desc=video_in.name)
 +
