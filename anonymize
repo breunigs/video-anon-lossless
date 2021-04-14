@@ -6,6 +6,9 @@ export USER=$(whoami)
 docker build -t video-anon $(dirname "$0")
 
 echo "\n\n"
+if [ -n "$1" ]; then
+  cd "$1"
+fi
 
 docker run --rm --name video-anon \
   -u $(id -u ${USER}):$(id -g ${USER}) \
