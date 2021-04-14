@@ -1,17 +1,17 @@
-From e8bdce359b62e04f521f562ee581c90a9323eb8a Mon Sep 17 00:00:00 2001
+From 06872a0a0ea7c8674e811a80d8ab059335522977 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 159 +++++++++++++++++++++----
+ anonymizer/anonymization/anonymizer.py | 158 +++++++++++++++++++++----
  anonymizer/bin/anonymize.py            |  42 +++----
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 160 insertions(+), 53 deletions(-)
+ 4 files changed, 159 insertions(+), 53 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..a40beb5 100644
+index 5f113d1..3f0beaa 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,33 @@
@@ -111,7 +111,7 @@ index 5f113d1..a40beb5 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +106,81 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +106,80 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -171,7 +171,6 @@ index 5f113d1..a40beb5 100644
 +
 +            if not write_json:
 +                rmtree(json_out_path)
-+            bar.close()
 +
 +    def anonymize_images(self, input_path, detection_thresholds, file_types, write_json):
          files = []
