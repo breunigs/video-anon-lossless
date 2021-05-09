@@ -1,17 +1,17 @@
-From 06872a0a0ea7c8674e811a80d8ab059335522977 Mon Sep 17 00:00:00 2001
+From eb3191073d0777f9e3d587dd0836225849d0fc5e Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 158 +++++++++++++++++++++----
- anonymizer/bin/anonymize.py            |  42 +++----
+ anonymizer/anonymization/anonymizer.py | 160 +++++++++++++++++++++----
+ anonymizer/bin/anonymize.py            |  50 ++++----
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 159 insertions(+), 53 deletions(-)
+ 4 files changed, 172 insertions(+), 50 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..3f0beaa 100644
+index 5f113d1..f197104 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,33 @@
@@ -55,7 +55,7 @@ index 5f113d1..3f0beaa 100644
      return np_image
  
  
-@@ -32,10 +51,53 @@ def save_detections(detections, detections_path):
+@@ -32,11 +51,60 @@ def save_detections(detections, detections_path):
          json.dump(json_output, output_file, indent=2)
  
  
@@ -104,14 +104,19 @@ index 5f113d1..3f0beaa 100644
 +
 +
  class Anonymizer:
--    def __init__(self, detectors, obfuscator):
-+    def __init__(self, detectors):
+     def __init__(self, detectors, obfuscator):
          self.detectors = detectors
--        self.obfuscator = obfuscator
+         self.obfuscator = obfuscator
  
++    def blur(self, image, detections):
++        if self.obfuscator != None:
++            return self.obfuscator.obfuscate(image, detections)
++        return blur_with_imagemagick(image, detections)
++
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +106,80 @@ def anonymize_image(self, image, detection_thresholds):
+             'Detector names must match detection threshold names'
+@@ -44,28 +112,80 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -141,7 +146,7 @@ index 5f113d1..3f0beaa 100644
  
 -    def anonymize_images(self, input_path, output_path, detection_thresholds, file_types, write_json):
 -        print(f'Anonymizing images in {input_path} and saving the anonymized images to {output_path}...')
-+            frame = blur_with_imagemagick(frame, detections)
++            frame = self.blur(frame, detections)
 +            writer.append_data(frame)
  
 -        Path(output_path).mkdir(exist_ok=True)
@@ -201,15 +206,24 @@ index 5f113d1..3f0beaa 100644
 +            else:
 +                detections = self.anonymize_image(image=image, detection_thresholds=detection_thresholds)
 +
-+            image = blur_with_imagemagick(image, detections)
++            image = self.blur(image, detections)
 +            save_np_image(image, output_image_path)
              if write_json:
                  save_detections(detections=detections, detections_path=str(output_detections_path))
 diff --git a/anonymizer/bin/anonymize.py b/anonymizer/bin/anonymize.py
-index 4dbf18c..553587f 100644
+index 4dbf18c..9217cb9 100644
 --- a/anonymizer/bin/anonymize.py
 +++ b/anonymizer/bin/anonymize.py
-@@ -29,16 +29,15 @@ def parse_args():
+@@ -21,6 +21,8 @@
+ from anonymizer.detection import Detector, download_weights, get_weights_path
+ from anonymizer.obfuscation import Obfuscator
+ 
++import tensorflow
++
+ 
+ def parse_args():
+     parser = argparse.ArgumentParser(
+@@ -29,16 +31,15 @@ def parse_args():
                          metavar='/path/to/input_folder',
                          help='Path to a folder that contains the images that should be anonymized. '
                               'Images can be arbitrarily nested in subfolders and will still be found.')
@@ -231,7 +245,7 @@ index 4dbf18c..553587f 100644
                          help='Comma-separated list of file types that will be anonymized')
      parser.add_argument('--face-threshold', type=float, required=False, default=0.3,
                          metavar='0.3',
-@@ -51,37 +50,24 @@ def parse_args():
+@@ -51,37 +52,24 @@ def parse_args():
      parser.add_argument('--write-detections', dest='write_detections', action='store_true')
      parser.add_argument('--no-write-detections', dest='write_detections', action='store_false')
      parser.set_defaults(write_detections=True)
@@ -272,13 +286,20 @@ index 4dbf18c..553587f 100644
      detectors = {
          'face': Detector(kind='face', weights_path=get_weights_path(weights_path, kind='face')),
          'plate': Detector(kind='plate', weights_path=get_weights_path(weights_path, kind='plate'))
-@@ -90,15 +76,19 @@ def main(input_path, image_output_path, weights_path, image_extensions, face_thr
+@@ -90,15 +78,27 @@ def main(input_path, image_output_path, weights_path, image_extensions, face_thr
          'face': face_threshold,
          'plate': plate_threshold
      }
--    anonymizer = Anonymizer(obfuscator=obfuscator, detectors=detectors)
++
++    obfuscator = None
++    if tensorflow.test.gpu_device_name():
++        print("GPU detected, using that to blur")
++        obfuscator = Obfuscator(kernel_size=21, sigma=0.2, box_kernel_size=9)
++    else:
++        print("No GPU detected, blurring with imagemagick on CPU")
++
+     anonymizer = Anonymizer(obfuscator=obfuscator, detectors=detectors)
 -    anonymizer.anonymize_images(input_path=input_path, output_path=image_output_path,
-+    anonymizer = Anonymizer(detectors=detectors)
 +    anonymizer.anonymize_images(input_path=input_path,
                                  detection_thresholds=detection_thresholds, file_types=image_extensions.split(','),
                                  write_json=write_json)
