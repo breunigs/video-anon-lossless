@@ -1,20 +1,20 @@
-From e1b0ba10378b7c4c5e49ef44e860fe3011bc5391 Mon Sep 17 00:00:00 2001
+From 1cbe8e5a8f33f1ec3ed977796481fabb2db9aba9 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 184 ++++++++++++++++++++++---
- anonymizer/bin/anonymize.py            |  50 +++----
+ anonymizer/anonymization/anonymizer.py | 202 ++++++++++++++++++++++---
+ anonymizer/bin/anonymize.py            |  50 +++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 196 insertions(+), 50 deletions(-)
+ 4 files changed, 214 insertions(+), 50 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..f11a031 100644
+index 5f113d1..f5c5c8f 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
-@@ -1,14 +1,35 @@
+@@ -1,14 +1,36 @@
 -import json
 -from pathlib import Path
 -
@@ -35,6 +35,7 @@ index 5f113d1..f11a031 100644
 +import tarfile
 +from shutil import rmtree
 +import threading
++import signal
  
  
  def load_np_image(image_path):
@@ -57,7 +58,7 @@ index 5f113d1..f11a031 100644
      return np_image
  
  
-@@ -32,11 +53,60 @@ def save_detections(detections, detections_path):
+@@ -32,10 +54,67 @@ def save_detections(detections, detections_path):
          json.dump(json_output, output_file, indent=2)
  
  
@@ -109,16 +110,23 @@ index 5f113d1..f11a031 100644
      def __init__(self, detectors, obfuscator):
          self.detectors = detectors
          self.obfuscator = obfuscator
- 
++        self.need_to_shutdown = False
++
++        signal.signal(signal.SIGINT, self.shutdown)
++        signal.signal(signal.SIGTERM, self.shutdown)
++
++    def shutdown(self, signum, frame):
++        print("\nTrying to shutdown gracefully...")
++        self.need_to_shutdown = True
++
 +    def blur(self, image, detections):
 +        if self.obfuscator != None:
 +            return self.obfuscator.obfuscate(image, detections)
 +        return blur_with_imagemagick(image, detections)
-+
+ 
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-             'Detector names must match detection threshold names'
-@@ -44,28 +114,102 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +123,111 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -155,19 +163,20 @@ index 5f113d1..f11a031 100644
 +                ))
 +                thrJsonSaver.start()
 +
++            if self.need_to_shutdown:
++                break
++
 +            frame = self.blur(frame, detections)
 +
 +            if thrVideoWriter != None:
 +                thrVideoWriter.join()
 +            thrVideoWriter = threading.Thread(target=writer.append_data, args=[frame])
 +            thrVideoWriter.start()
++
++            bar.update()
  
 -    def anonymize_images(self, input_path, output_path, detection_thresholds, file_types, write_json):
 -        print(f'Anonymizing images in {input_path} and saving the anonymized images to {output_path}...')
-+            bar.update()
- 
--        Path(output_path).mkdir(exist_ok=True)
--        assert Path(output_path).is_dir(), 'Output path must be a directory'
 +        if thrJsonSaver != None:
 +            thrJsonSaver.join()
 +        if thrVideoWriter != None:
@@ -175,15 +184,15 @@ index 5f113d1..f11a031 100644
 +        writer.close()
 +        bar.close()
  
+-        Path(output_path).mkdir(exist_ok=True)
+-        assert Path(output_path).is_dir(), 'Output path must be a directory'
 +    def anonymize_videos(self, input_path, detection_thresholds, file_types, write_json):
-         files = []
-         for file_type in file_types:
-             files.extend(list(Path(input_path).glob(f'**/*.{file_type}')))
++        files = []
++        for file_type in file_types:
++            files.extend(list(Path(input_path).glob(f'**/*.{file_type}')))
 +        files = [f for f in files if not f.name.endswith(".anonymized.mkv")]
 +        files = [f for f in files if not Path(f"{f}.anonymized.mkv").exists()]
- 
--        for input_image_path in tqdm(files):
--            # Create output directory
++
 +        for video in tqdm(files, desc="Videos"):
 +            relative_path = video.relative_to(input_path)
 +            video_out_path = (Path(input_path) / relative_path).with_name(f"{video.name}.anonymized.mkv")
@@ -195,6 +204,9 @@ index 5f113d1..f11a031 100644
 +                self.anonymize_video(video, detection_thresholds, tmp_path, json_out_path)
 +                tmp_path.rename(video_out_path)
 +
++            if self.need_to_shutdown:
++                return
+ 
 +            if write_json:
 +                json_tar_path = (Path(input_path) / relative_path).with_name(f'{video.name}_jsons.tar.gz')
 +                tar = tarfile.open(json_tar_path, "w:gz")
@@ -204,12 +216,14 @@ index 5f113d1..f11a031 100644
 +            rmtree(json_out_path)
 +
 +    def anonymize_images(self, input_path, detection_thresholds, file_types, write_json):
-+        files = []
-+        for file_type in file_types:
-+            files.extend(list(Path(input_path).glob(f'**/*.{file_type}')))
+         files = []
+         for file_type in file_types:
+             files.extend(list(Path(input_path).glob(f'**/*.{file_type}')))
 +        files = [f for f in files if not f.name.endswith(".anonymized.png")]
 +        files = [f for f in files if not Path(f"{f}.anonymized.png").exists()]
-+
+ 
+-        for input_image_path in tqdm(files):
+-            # Create output directory
 +        for input_image_path in tqdm(files, desc="Images"):
              relative_path = input_image_path.relative_to(input_path)
 -            (Path(output_path) / relative_path.parent).mkdir(exist_ok=True, parents=True)
@@ -234,6 +248,9 @@ index 5f113d1..f11a031 100644
 +            save_np_image(image, output_image_path)
              if write_json:
                  save_detections(detections=detections, detections_path=str(output_detections_path))
++
++            if self.need_to_shutdown:
++                break
 diff --git a/anonymizer/bin/anonymize.py b/anonymizer/bin/anonymize.py
 index 4dbf18c..9217cb9 100644
 --- a/anonymizer/bin/anonymize.py

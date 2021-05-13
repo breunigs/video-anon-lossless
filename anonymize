@@ -29,7 +29,7 @@ echo "\n\n"
 cd $wd
 
 
-docker run --rm --name video-anon \
+docker run -it --rm --name video-anon \
   -u $(id -u ${USER}):$(id -g ${USER}) \
   --mount type=bind,source=$(pwd),target=/data \
   video-anon:runner
