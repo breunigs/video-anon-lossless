@@ -1,20 +1,20 @@
-From 662ceb862ae9fc33c6c3189f3b7fbb3d54cd3a63 Mon Sep 17 00:00:00 2001
+From e1b0ba10378b7c4c5e49ef44e860fe3011bc5391 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 166 ++++++++++++++++++++++---
- anonymizer/bin/anonymize.py            |  50 ++++----
+ anonymizer/anonymization/anonymizer.py | 184 ++++++++++++++++++++++---
+ anonymizer/bin/anonymize.py            |  50 +++----
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 178 insertions(+), 50 deletions(-)
+ 4 files changed, 196 insertions(+), 50 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..d387036 100644
+index 5f113d1..f11a031 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
-@@ -1,14 +1,34 @@
+@@ -1,14 +1,35 @@
 -import json
 -from pathlib import Path
 -
@@ -34,6 +34,7 @@ index 5f113d1..d387036 100644
 +import io
 +import tarfile
 +from shutil import rmtree
++import threading
  
  
  def load_np_image(image_path):
@@ -56,7 +57,7 @@ index 5f113d1..d387036 100644
      return np_image
  
  
-@@ -32,11 +52,60 @@ def save_detections(detections, detections_path):
+@@ -32,11 +53,60 @@ def save_detections(detections, detections_path):
          json.dump(json_output, output_file, indent=2)
  
  
@@ -117,7 +118,7 @@ index 5f113d1..d387036 100644
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
              'Detector names must match detection threshold names'
-@@ -44,28 +113,85 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +114,102 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -130,48 +131,65 @@ index 5f113d1..d387036 100644
 +        _ = meta['size']
 +        read_iter = reader.iter_data()
 +        nframes = reader.count_frames()
- 
--    def anonymize_images(self, input_path, output_path, detection_thresholds, file_types, write_json):
--        print(f'Anonymizing images in {input_path} and saving the anonymized images to {output_path}...')
++
 +        writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer = imageio.get_writer(
 +            video_out, format='FFMPEG', mode='I', fps=meta['fps'], codec="ffv1",
 +            quality=None, output_params=["-movflags", "frag_keyframe+empty_moov"])
- 
--        Path(output_path).mkdir(exist_ok=True)
--        assert Path(output_path).is_dir(), 'Output path must be a directory'
++
 +        bar = tqdm(dynamic_ncols=True, total=nframes, position=1, leave=True, desc=video_in.name)
- 
++
++        thrJsonSaver = None
++        thrVideoWriter = None
 +        for index, frame in enumerate(read_iter):
 +            output_detections_path = json_out_path / f"{index}.json"
 +            if (output_detections_path).exists():
 +                detections = load_detections(detections_path=str(output_detections_path))
 +            else:
 +                detections = self.anonymize_image(image=frame, detection_thresholds=detection_thresholds)
-+                save_detections(detections=detections, detections_path=str(output_detections_path))
++
++                if thrJsonSaver != None:
++                    thrJsonSaver.join()
++                thrJsonSaver = threading.Thread(target=save_detections, kwargs=dict(
++                    detections=detections,
++                    detections_path=str(output_detections_path)
++                ))
++                thrJsonSaver.start()
 +
 +            frame = self.blur(frame, detections)
-+            writer.append_data(frame)
 +
++            if thrVideoWriter != None:
++                thrVideoWriter.join()
++            thrVideoWriter = threading.Thread(target=writer.append_data, args=[frame])
++            thrVideoWriter.start()
+ 
+-    def anonymize_images(self, input_path, output_path, detection_thresholds, file_types, write_json):
+-        print(f'Anonymizing images in {input_path} and saving the anonymized images to {output_path}...')
 +            bar.update()
-+
+ 
+-        Path(output_path).mkdir(exist_ok=True)
+-        assert Path(output_path).is_dir(), 'Output path must be a directory'
++        if thrJsonSaver != None:
++            thrJsonSaver.join()
++        if thrVideoWriter != None:
++            thrVideoWriter.join()
 +        writer.close()
 +        bar.close()
-+
+ 
 +    def anonymize_videos(self, input_path, detection_thresholds, file_types, write_json):
          files = []
          for file_type in file_types:
              files.extend(list(Path(input_path).glob(f'**/*.{file_type}')))
 +        files = [f for f in files if not f.name.endswith(".anonymized.mkv")]
 +        files = [f for f in files if not Path(f"{f}.anonymized.mkv").exists()]
-+
+ 
+-        for input_image_path in tqdm(files):
+-            # Create output directory
 +        for video in tqdm(files, desc="Videos"):
 +            relative_path = video.relative_to(input_path)
 +            video_out_path = (Path(input_path) / relative_path).with_name(f"{video.name}.anonymized.mkv")
 +            json_out_path = (Path(input_path) / relative_path).with_name(f'{video.name}_jsons')
 +            json_out_path.mkdir(parents=True, exist_ok=True)
- 
--        for input_image_path in tqdm(files):
--            # Create output directory
++
 +            with tempfile.TemporaryDirectory(prefix=video.name, dir=input_path) as tmp_dir:
 +                tmp_path = Path(tmp_dir) / video_out_path.name
 +                self.anonymize_video(video, detection_thresholds, tmp_path, json_out_path)
