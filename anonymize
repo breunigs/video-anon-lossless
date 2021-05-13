@@ -28,8 +28,12 @@ docker build -t video-anon:runner .
 echo "\n\n"
 cd $wd
 
+extra=""
+if [ -t 1 ]; then
+  extra="--tty"
+fi
 
-docker run -it --rm --name video-anon \
+docker run -i $extra --rm --name video-anon \
   -u $(id -u ${USER}):$(id -g ${USER}) \
   --mount type=bind,source=$(pwd),target=/data \
   video-anon:runner
