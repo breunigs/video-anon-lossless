@@ -1,20 +1,20 @@
-From 7cb752c5d69e77cf5064fdfb541622d99885914e Mon Sep 17 00:00:00 2001
+From bbd2b3e45aacadd8f2341e5b0a27e4ef20f4331d Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 244 +++++++++++++++++++++----
+ anonymizer/anonymization/anonymizer.py | 237 +++++++++++++++++++++----
  anonymizer/bin/anonymize.py            |  59 +++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 251 insertions(+), 64 deletions(-)
+ 4 files changed, 244 insertions(+), 64 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..5e84160 100644
+index 5f113d1..7bb86e7 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
-@@ -1,14 +1,37 @@
+@@ -1,14 +1,36 @@
 -import json
 -from pathlib import Path
 -
@@ -32,7 +32,6 @@ index 5f113d1..5e84160 100644
 +import sys
 +import tempfile
 +import io
-+import tarfile
 +from shutil import rmtree
 +import threading
 +import signal
@@ -59,7 +58,7 @@ index 5f113d1..5e84160 100644
      return np_image
  
  
-@@ -18,24 +41,90 @@ def save_np_image(image, image_path):
+@@ -18,24 +40,90 @@ def save_np_image(image, image_path):
  
  
  def save_detections(detections, detections_path):
@@ -161,7 +160,7 @@ index 5f113d1..5e84160 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +133,115 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +132,109 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -259,12 +258,6 @@ index 5f113d1..5e84160 100644
 -            (Path(output_path) / relative_path.parent).mkdir(exist_ok=True, parents=True)
 -            output_image_path = Path(output_path) / relative_path
 -            output_detections_path = (Path(output_path) / relative_path).with_suffix('.json')
-+            # if write_json:
-+            #     json_tar_path = video.with_name(f'{video.name}_jsons.tar.gz')
-+            #     tar = tarfile.open(json_tar_path, "w:gz")
-+            #     tar.add(json_out_path, arcname=f'{video.name}_jsons')
-+            #     tar.close()
-+
 +            rmtree(json_out_path)
 +
 +    def anonymize_images(self, input_path, detection_thresholds, all_files, file_types, write_json):
