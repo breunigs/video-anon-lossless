@@ -28,8 +28,7 @@ ENV TF_XLA_FLAGS="--tf_xla_auto_jit=2 --tf_xla_cpu_global_jit"
 ENV PYTHONPATH=${PYTHONPATH}:/app/anonymizer/
 
 # run once to warm weights cache
-RUN --mount=type=cache,target=/anonymizer-weights-cache \
-  python3 /app/anonymizer/anonymizer/bin/anonymize.py \
+RUN python3 /app/anonymizer/anonymizer/bin/anonymize.py \
   --weights /anonymizer-weights-cache \
   --image-output /data \
   --input /data
