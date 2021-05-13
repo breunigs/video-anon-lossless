@@ -1,17 +1,17 @@
-From 3e393f81be672b7ef633c8b2fb90d73f229d485c Mon Sep 17 00:00:00 2001
+From 8756a1428419d34d3f325fd3ed160ca62ad906b3 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 202 ++++++++++++++++++++++---
- anonymizer/bin/anonymize.py            |  50 +++---
+ anonymizer/anonymization/anonymizer.py | 210 ++++++++++++++++++++++---
+ anonymizer/bin/anonymize.py            |  59 ++++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 213 insertions(+), 51 deletions(-)
+ 4 files changed, 228 insertions(+), 53 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..f346d9d 100644
+index 5f113d1..3547e02 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,36 @@
@@ -126,7 +126,7 @@ index 5f113d1..f346d9d 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +123,109 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +123,113 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -172,11 +172,13 @@ index 5f113d1..f346d9d 100644
 +                thrVideoWriter.join()
 +            thrVideoWriter = threading.Thread(target=writer.append_data, args=[frame])
 +            thrVideoWriter.start()
-+
-+            bar.update()
  
 -    def anonymize_images(self, input_path, output_path, detection_thresholds, file_types, write_json):
 -        print(f'Anonymizing images in {input_path} and saving the anonymized images to {output_path}...')
++            bar.update()
+ 
+-        Path(output_path).mkdir(exist_ok=True)
+-        assert Path(output_path).is_dir(), 'Output path must be a directory'
 +        if thrJsonSaver != None:
 +            thrJsonSaver.join()
 +        if thrVideoWriter != None:
@@ -184,14 +186,28 @@ index 5f113d1..f346d9d 100644
 +        writer.close()
 +        bar.close()
  
--        Path(output_path).mkdir(exist_ok=True)
--        assert Path(output_path).is_dir(), 'Output path must be a directory'
-+    def anonymize_videos(self, input_path, detection_thresholds, file_types, write_json):
-+        files = []
-+        for file_type in file_types:
-+            files.extend(list(Path(input_path).glob(f'**/*.{file_type}')))
-+        files = [f for f in files if not f.name.endswith(".anonymized.mkv")]
-+        files = [f for f in files if not Path(f"{f}.anonymized.mkv").exists()]
++    def filter_files(self, all_files, file_types, suffix):
+         files = []
+-        for file_type in file_types:
+-            files.extend(list(Path(input_path).glob(f'**/*.{file_type}')))
++        for file in all_files.keys():
++            if file.endswith(suffix):
++                continue
++            if file+suffix in all_files:
++                continue
++            if not any(file.endswith(f'.{x}') for x in file_types):
++                continue
++            files.append(Path(file))
++        return files
+ 
+-        for input_image_path in tqdm(files):
+-            # Create output directory
+-            relative_path = input_image_path.relative_to(input_path)
+-            (Path(output_path) / relative_path.parent).mkdir(exist_ok=True, parents=True)
+-            output_image_path = Path(output_path) / relative_path
+-            output_detections_path = (Path(output_path) / relative_path).with_suffix('.json')
++    def anonymize_videos(self, input_path, detection_thresholds, all_files, file_types, write_json):
++        files = self.filter_files(all_files, file_types, ".anonymized.mkv")
 +
 +        for video in tqdm(files, desc="Videos"):
 +            video_out_path = video.with_name(f"{video.name}.anonymized.mkv")
@@ -205,7 +221,7 @@ index 5f113d1..f346d9d 100644
 +                    return
 +
 +                tmp_path.rename(video_out_path)
- 
++
 +            if write_json:
 +                json_tar_path = video.with_name(f'{video.name}_jsons.tar.gz')
 +                tar = tarfile.open(json_tar_path, "w:gz")
@@ -214,19 +230,9 @@ index 5f113d1..f346d9d 100644
 +
 +            rmtree(json_out_path)
 +
-+    def anonymize_images(self, input_path, detection_thresholds, file_types, write_json):
-         files = []
-         for file_type in file_types:
-             files.extend(list(Path(input_path).glob(f'**/*.{file_type}')))
-+        files = [f for f in files if not f.name.endswith(".anonymized.png")]
-+        files = [f for f in files if not Path(f"{f}.anonymized.png").exists()]
- 
--        for input_image_path in tqdm(files):
--            # Create output directory
--            relative_path = input_image_path.relative_to(input_path)
--            (Path(output_path) / relative_path.parent).mkdir(exist_ok=True, parents=True)
--            output_image_path = Path(output_path) / relative_path
--            output_detections_path = (Path(output_path) / relative_path).with_suffix('.json')
++    def anonymize_images(self, input_path, detection_thresholds, all_files, file_types, write_json):
++        files = self.filter_files(all_files, file_types, ".anonymized.png")
++
 +        for input_image_path in tqdm(files, desc="Images"):
 +            output_image_path = video.with_suffix(".anonymized.png")
 +            output_detections_path = video.with_suffix('.json')
@@ -251,19 +257,20 @@ index 5f113d1..f346d9d 100644
 +            if self.need_to_shutdown:
 +                break
 diff --git a/anonymizer/bin/anonymize.py b/anonymizer/bin/anonymize.py
-index 4dbf18c..9217cb9 100644
+index 4dbf18c..31c5541 100644
 --- a/anonymizer/bin/anonymize.py
 +++ b/anonymizer/bin/anonymize.py
-@@ -21,6 +21,8 @@
+@@ -21,6 +21,9 @@
  from anonymizer.detection import Detector, download_weights, get_weights_path
  from anonymizer.obfuscation import Obfuscator
  
 +import tensorflow
++import os
 +
  
  def parse_args():
      parser = argparse.ArgumentParser(
-@@ -29,16 +31,15 @@ def parse_args():
+@@ -29,16 +32,15 @@ def parse_args():
                          metavar='/path/to/input_folder',
                          help='Path to a folder that contains the images that should be anonymized. '
                               'Images can be arbitrarily nested in subfolders and will still be found.')
@@ -285,7 +292,7 @@ index 4dbf18c..9217cb9 100644
                          help='Comma-separated list of file types that will be anonymized')
      parser.add_argument('--face-threshold', type=float, required=False, default=0.3,
                          metavar='0.3',
-@@ -51,37 +52,24 @@ def parse_args():
+@@ -51,37 +53,24 @@ def parse_args():
      parser.add_argument('--write-detections', dest='write_detections', action='store_true')
      parser.add_argument('--no-write-detections', dest='write_detections', action='store_false')
      parser.set_defaults(write_detections=True)
@@ -326,7 +333,7 @@ index 4dbf18c..9217cb9 100644
      detectors = {
          'face': Detector(kind='face', weights_path=get_weights_path(weights_path, kind='face')),
          'plate': Detector(kind='plate', weights_path=get_weights_path(weights_path, kind='plate'))
-@@ -90,15 +78,27 @@ def main(input_path, image_output_path, weights_path, image_extensions, face_thr
+@@ -90,15 +79,35 @@ def main(input_path, image_output_path, weights_path, image_extensions, face_thr
          'face': face_threshold,
          'plate': plate_threshold
      }
@@ -338,13 +345,21 @@ index 4dbf18c..9217cb9 100644
 +    else:
 +        print("No GPU detected, blurring with imagemagick on CPU")
 +
++    all_files = {}
++    for (dirpath, dirnames, filenames) in os.walk(input_path):
++        for file in filenames:
++            all_files[os.path.join(dirpath, file)] = True
++        for dirname in dirnames:
++            if dirname.endswith("_jsons"):
++                dirnames.remove(dirname)
++
      anonymizer = Anonymizer(obfuscator=obfuscator, detectors=detectors)
 -    anonymizer.anonymize_images(input_path=input_path, output_path=image_output_path,
-+    anonymizer.anonymize_images(input_path=input_path,
++    anonymizer.anonymize_images(input_path=input_path, all_files=all_files,
                                  detection_thresholds=detection_thresholds, file_types=image_extensions.split(','),
                                  write_json=write_json)
  
-+    anonymizer.anonymize_videos(input_path=input_path,
++    anonymizer.anonymize_videos(input_path=input_path, all_files=all_files,
 +                                detection_thresholds=detection_thresholds, file_types=video_extensions.split(','), write_json=write_json)
 +
  
