@@ -1,17 +1,17 @@
-From b44439ce3022edbe7c02acb00b35a69e63d4f537 Mon Sep 17 00:00:00 2001
+From 3e393f81be672b7ef633c8b2fb90d73f229d485c Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 210 ++++++++++++++++++++++---
+ anonymizer/anonymization/anonymizer.py | 202 ++++++++++++++++++++++---
  anonymizer/bin/anonymize.py            |  50 +++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 221 insertions(+), 51 deletions(-)
+ 4 files changed, 213 insertions(+), 51 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..7df75f8 100644
+index 5f113d1..f346d9d 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,36 @@
@@ -126,7 +126,7 @@ index 5f113d1..7df75f8 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +123,117 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +123,109 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -194,27 +194,20 @@ index 5f113d1..7df75f8 100644
 +        files = [f for f in files if not Path(f"{f}.anonymized.mkv").exists()]
 +
 +        for video in tqdm(files, desc="Videos"):
-+            relative_path = video  # video.relative_to(input_path)
-+            video_out_path = relative_path.with_name(f"{video.name}.anonymized.mkv")
-+            json_out_path = relative_path.with_name(f'{video.name}_jsons')
++            video_out_path = video.with_name(f"{video.name}.anonymized.mkv")
++            json_out_path = video.with_name(f'{video.name}_jsons')
 +            json_out_path.mkdir(parents=True, exist_ok=True)
 +
-+            with tempfile.TemporaryDirectory(prefix=video.name, dir=relative_path.parent) as tmp_dir:
-+                print(f'THIS IS THE input_path: {input_path}')
-+                print(f'THIS IS THE relative_path: {relative_path}')
-+                print(f'THIS IS THE relative_path.parent: {relative_path.parent}')
-+                print(f'THIS IS THE TMP DIR: {tmp_dir}')
++            with tempfile.TemporaryDirectory(prefix=video.name, dir=video.parent) as tmp_dir:
 +                tmp_path = Path(tmp_dir) / video_out_path.name
-+                print(f'THIS IS THE tmp_path: {tmp_path}')
-+                return
 +                self.anonymize_video(video, detection_thresholds, tmp_path, json_out_path)
-+                tmp_path.rename(video_out_path)
++                if self.need_to_shutdown:
++                    return
 +
-+            if self.need_to_shutdown:
-+                return
++                tmp_path.rename(video_out_path)
  
 +            if write_json:
-+                json_tar_path = relative_path.with_name(f'{video.name}_jsons.tar.gz')
++                json_tar_path = video.with_name(f'{video.name}_jsons.tar.gz')
 +                tar = tarfile.open(json_tar_path, "w:gz")
 +                tar.add(json_out_path, arcname=f'{video.name}_jsons')
 +                tar.close()
@@ -235,9 +228,8 @@ index 5f113d1..7df75f8 100644
 -            output_image_path = Path(output_path) / relative_path
 -            output_detections_path = (Path(output_path) / relative_path).with_suffix('.json')
 +        for input_image_path in tqdm(files, desc="Images"):
-+            relative_path = Path(input_path) / input_image_path.relative_to(input_path)
-+            output_image_path = relative_path.with_suffix(".anonymized.png")
-+            output_detections_path = relative_path.with_suffix('.json')
++            output_image_path = video.with_suffix(".anonymized.png")
++            output_detections_path = video.with_suffix('.json')
 +            if output_image_path.exists():
 +                continue
  
