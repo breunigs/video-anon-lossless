@@ -1,17 +1,17 @@
-From 8756a1428419d34d3f325fd3ed160ca62ad906b3 Mon Sep 17 00:00:00 2001
+From da0157b63cbc1668b073c6dd6dd4f513ad393392 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 210 ++++++++++++++++++++++---
+ anonymizer/anonymization/anonymizer.py | 211 ++++++++++++++++++++++---
  anonymizer/bin/anonymize.py            |  59 ++++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 228 insertions(+), 53 deletions(-)
+ 4 files changed, 229 insertions(+), 53 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..3547e02 100644
+index 5f113d1..3d3ec58 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,36 @@
@@ -126,7 +126,7 @@ index 5f113d1..3547e02 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +123,113 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +123,114 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -198,6 +198,7 @@ index 5f113d1..3547e02 100644
 +            if not any(file.endswith(f'.{x}') for x in file_types):
 +                continue
 +            files.append(Path(file))
++        files.sort()
 +        return files
  
 -        for input_image_path in tqdm(files):
