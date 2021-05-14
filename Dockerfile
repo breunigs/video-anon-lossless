@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:experimental
 
-FROM tensorflow/tensorflow:devel
+FROM tensorflow/tensorflow:1.15.5
 
 RUN mkdir /app/ /anonymizer-weights-cache
 WORKDIR /app/
@@ -18,7 +18,7 @@ RUN apt-get update && apt-get -y install --no-install-recommends \
 RUN pip3 install --upgrade pip
 COPY tensorflow-1.15.5-cp36-cp36m-linux_x86_64.whl /app/
 COPY requirements.txt /app/
-RUN pip3 install -r requirements.txt
+RUN pip3 uninstall tensorflow --yes && pip3 install -r requirements.txt
 
 RUN git clone https://github.com/understand-ai/anonymizer.git anonymizer --depth 1 && \
   cd anonymizer && \
