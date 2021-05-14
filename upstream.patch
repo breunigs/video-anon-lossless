@@ -1,20 +1,20 @@
-From bbd2b3e45aacadd8f2341e5b0a27e4ef20f4331d Mon Sep 17 00:00:00 2001
+From d1170c8987abac5217dd4e34e5e0111f1cdc1f1d Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 237 +++++++++++++++++++++----
- anonymizer/bin/anonymize.py            |  59 +++---
+ anonymizer/anonymization/anonymizer.py | 236 +++++++++++++++++++++----
+ anonymizer/bin/anonymize.py            |  59 ++++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 244 insertions(+), 64 deletions(-)
+ 4 files changed, 243 insertions(+), 64 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..7bb86e7 100644
+index 5f113d1..681dd02 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
-@@ -1,14 +1,36 @@
+@@ -1,14 +1,35 @@
 -import json
 -from pathlib import Path
 -
@@ -32,7 +32,6 @@ index 5f113d1..7bb86e7 100644
 +import sys
 +import tempfile
 +import io
-+from shutil import rmtree
 +import threading
 +import signal
 +import gzip
@@ -58,7 +57,7 @@ index 5f113d1..7bb86e7 100644
      return np_image
  
  
-@@ -18,24 +40,90 @@ def save_np_image(image, image_path):
+@@ -18,24 +39,90 @@ def save_np_image(image, image_path):
  
  
  def save_detections(detections, detections_path):
@@ -160,7 +159,7 @@ index 5f113d1..7bb86e7 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +132,109 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +131,109 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -242,7 +241,6 @@ index 5f113d1..7bb86e7 100644
 +        for video in tqdm(files, desc="Videos"):
 +            video_out_path = video.with_name(f"{video.name}.anonymized.mkv")
 +            json_out_path = video.with_name(f'{video.name}.json.gz')
-+            # json_out_path.mkdir(parents=True, exist_ok=True)
 +
 +            with tempfile.TemporaryDirectory(prefix=video.name, dir=video.parent) as tmp_dir:
 +                tmp_path = Path(tmp_dir) / video_out_path.name
@@ -258,7 +256,8 @@ index 5f113d1..7bb86e7 100644
 -            (Path(output_path) / relative_path.parent).mkdir(exist_ok=True, parents=True)
 -            output_image_path = Path(output_path) / relative_path
 -            output_detections_path = (Path(output_path) / relative_path).with_suffix('.json')
-+            rmtree(json_out_path)
++            if not write_json:
++                os.remove(json_out_path)
 +
 +    def anonymize_images(self, input_path, detection_thresholds, all_files, file_types, write_json):
 +        files = self.filter_files(all_files, file_types, ".anonymized.png")
