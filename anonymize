@@ -35,5 +35,6 @@ fi
 
 docker run -i $extra --rm --name video-anon \
   -u $(id -u ${USER}):$(id -g ${USER}) \
+  --gpus all \
   --mount type=bind,source=$(pwd),target=/data \
   video-anon:runner

@@ -16,7 +16,6 @@ RUN apt-get update && apt-get -y install --no-install-recommends \
   python3-wheel
 
 RUN pip3 install --upgrade pip
-COPY tensorflow-1.15.5-cp36-cp36m-linux_x86_64.whl /app/
 COPY requirements.txt /app/
 RUN pip3 uninstall tensorflow --yes && pip3 install -r requirements.txt
 
