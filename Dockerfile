@@ -23,7 +23,8 @@ RUN git clone https://github.com/understand-ai/anonymizer.git anonymizer --depth
   cd anonymizer && \
   git checkout 2fc7ab3f485621270ea9969297f0878c2a1b415e
 
-ENV TF_XLA_FLAGS="--tf_xla_auto_jit=2 --tf_xla_cpu_global_jit"
+# too much memory :(
+#ENV TF_XLA_FLAGS="--tf_xla_auto_jit=2 --tf_xla_cpu_global_jit"
 ENV PYTHONPATH=${PYTHONPATH}:/app/anonymizer/
 
 # run once to warm weights cache
