@@ -18,7 +18,7 @@ if [ ! -f "tensorflow-1.15.5-cp36-cp36m-linux_x86_64.whl" ]; then
   docker build -t video-anon:tensorflow .
   cd ..
 
-  docker create --name="tmp_$$" video-anon:tensorflow fakecmd
+  docker create --gpus all --name="tmp_$$" video-anon:tensorflow fakecmd
   docker export tmp_$$ | tar x --wildcards '*.whl'
   docker rm tmp_$$
 fi

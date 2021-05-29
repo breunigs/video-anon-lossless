@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:experimental
 
-FROM tensorflow/tensorflow:devel AS builder
+FROM tensorflow/tensorflow:devel-gpu AS builder
 
 WORKDIR /tensorflow_src
 RUN rm $(which bazel)
