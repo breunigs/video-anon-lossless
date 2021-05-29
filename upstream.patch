@@ -1,17 +1,17 @@
-From 5d27b1bc2df399abd13878762fe4e5421c5047e9 Mon Sep 17 00:00:00 2001
+From afa734357a580919b77ae4b23e683bff4424d5e2 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 244 +++++++++++++++++++++----
- anonymizer/bin/anonymize.py            |  59 +++---
+ anonymizer/anonymization/anonymizer.py | 248 +++++++++++++++++++++----
+ anonymizer/bin/anonymize.py            |  54 +++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 251 insertions(+), 64 deletions(-)
+ 4 files changed, 250 insertions(+), 64 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..e5c7f53 100644
+index 5f113d1..252c7c9 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,35 @@
@@ -57,7 +57,7 @@ index 5f113d1..e5c7f53 100644
      return np_image
  
  
-@@ -18,24 +39,90 @@ def save_np_image(image, image_path):
+@@ -18,24 +39,94 @@ def save_np_image(image, image_path):
  
  
  def save_detections(detections, detections_path):
@@ -100,6 +100,7 @@ index 5f113d1..e5c7f53 100644
 +def blur_with_imagemagick(image, detections):
 +    if len(detections) == 0:
 +        return image
++    print("\n\n\n\n")
 +
 +    cmd = ['convert']
      for box in detections:
@@ -122,6 +123,7 @@ index 5f113d1..e5c7f53 100644
 +            cmd.extend(['-region', f'{w}x{h}+{x}+{y}', '-blur', blur])
 +    cmd.extend(['-', '-'])
 +
++    print("creating pil image from nparray\n")
 +    pil_image = Image.fromarray((image).astype(np.uint8), mode='RGB')
 +    with io.BytesIO() as buff:
 +        pil_image.save(buff, format="BMP")
@@ -133,7 +135,9 @@ index 5f113d1..e5c7f53 100644
 +        print(str(stderr))
 +    assert len(stderr) == 0, 'ImageMagick did not succeed blurring. Is it installed?'
 +
++    print("reading image from imagemagick\n")
 +    image = Image.open(io.BytesIO(bmp)).convert('RGB')
++    print("converting to np array\n")
 +    np_image = np.array(image)
 +
 +    return np_image
@@ -159,7 +163,7 @@ index 5f113d1..e5c7f53 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +131,117 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +135,117 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -294,7 +298,7 @@ index 5f113d1..e5c7f53 100644
 +            if self.need_to_shutdown:
 +                break
 diff --git a/anonymizer/bin/anonymize.py b/anonymizer/bin/anonymize.py
-index 4dbf18c..31c5541 100644
+index 4dbf18c..9372342 100644
 --- a/anonymizer/bin/anonymize.py
 +++ b/anonymizer/bin/anonymize.py
 @@ -21,6 +21,9 @@
@@ -370,17 +374,12 @@ index 4dbf18c..31c5541 100644
      detectors = {
          'face': Detector(kind='face', weights_path=get_weights_path(weights_path, kind='face')),
          'plate': Detector(kind='plate', weights_path=get_weights_path(weights_path, kind='plate'))
-@@ -90,15 +79,35 @@ def main(input_path, image_output_path, weights_path, image_extensions, face_thr
+@@ -90,15 +79,30 @@ def main(input_path, image_output_path, weights_path, image_extensions, face_thr
          'face': face_threshold,
          'plate': plate_threshold
      }
 +
 +    obfuscator = None
-+    if tensorflow.test.gpu_device_name():
-+        print("GPU detected, using that to blur")
-+        obfuscator = Obfuscator(kernel_size=21, sigma=0.2, box_kernel_size=9)
-+    else:
-+        print("No GPU detected, blurring with imagemagick on CPU")
 +
 +    all_files = {}
 +    for (dirpath, dirnames, filenames) in os.walk(input_path):
