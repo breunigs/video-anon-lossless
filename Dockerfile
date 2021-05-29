@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:experimental
 
-FROM tensorflow/tensorflow:1.15.5
+FROM tensorflow/tensorflow:1.15.5-gpu
 
 RUN mkdir /app/ /anonymizer-weights-cache
 WORKDIR /app/
