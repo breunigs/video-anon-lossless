@@ -1,4 +1,4 @@
-From 39027c446f74358ab7dc1a18c087fade3cbddd57 Mon Sep 17 00:00:00 2001
+From 6151ed19ae6bb14a95bc200e69675910b8a0ca1e Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
@@ -11,7 +11,7 @@ Subject: [PATCH] hack it together
  4 files changed, 256 insertions(+), 66 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..add1a61 100644
+index 5f113d1..2e485d0 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,36 @@
@@ -258,7 +258,7 @@ index 5f113d1..add1a61 100644
 +                continue
 +
 +            if len(files) > idx+1:
-+                filename = files[idx+1].absolute
++                filename = files[idx+1].absolute()
 +                print(f"\n\nyay, trying to preload {idx+1} at {filename}\n\n", file=sys.stderr)
 +                threading.Thread(target=os.system, args=[f'cat {filename} >/dev/null'])
 +
