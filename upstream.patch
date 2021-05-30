@@ -1,17 +1,17 @@
-From 6151ed19ae6bb14a95bc200e69675910b8a0ca1e Mon Sep 17 00:00:00 2001
+From 56b032bd354aeb27e7e17f3db40cc71e10341ad4 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 252 +++++++++++++++++++++----
+ anonymizer/anonymization/anonymizer.py | 251 +++++++++++++++++++++----
  anonymizer/bin/anonymize.py            |  58 +++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 256 insertions(+), 66 deletions(-)
+ 4 files changed, 255 insertions(+), 66 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..2e485d0 100644
+index 5f113d1..081f00e 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,36 @@
@@ -160,7 +160,7 @@ index 5f113d1..2e485d0 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +132,124 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +132,123 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -259,8 +259,7 @@ index 5f113d1..2e485d0 100644
 +
 +            if len(files) > idx+1:
 +                filename = files[idx+1].absolute()
-+                print(f"\n\nyay, trying to preload {idx+1} at {filename}\n\n", file=sys.stderr)
-+                threading.Thread(target=os.system, args=[f'cat {filename} >/dev/null'])
++                threading.Thread(target=os.system, args=[f'cat {filename} >/dev/null']).start()
 +
 +            with tempfile.TemporaryDirectory(prefix=video.name, dir=video.parent) as tmp_dir:
 +                tmp_path = Path(tmp_dir) / video_out_path.name
