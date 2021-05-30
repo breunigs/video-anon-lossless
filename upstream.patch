@@ -1,17 +1,17 @@
-From ffacaecd0ec84e14d9ea4d64e12827bd53aa9eac Mon Sep 17 00:00:00 2001
+From 39027c446f74358ab7dc1a18c087fade3cbddd57 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 253 +++++++++++++++++++++----
+ anonymizer/anonymization/anonymizer.py | 252 +++++++++++++++++++++----
  anonymizer/bin/anonymize.py            |  58 +++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 257 insertions(+), 66 deletions(-)
+ 4 files changed, 256 insertions(+), 66 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..2ad22c5 100644
+index 5f113d1..add1a61 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,36 @@
@@ -150,7 +150,7 @@ index 5f113d1..2ad22c5 100644
 +        signal.signal(signal.SIGTERM, self.shutdown)
 +
 +    def shutdown(self, signum, frame):
-+        print("\nTrying to shutdown gracefully...")
++        print("\nTrying to shutdown gracefully...", file=sys.stderr)
 +        self.need_to_shutdown = True
 +
 +    def blur(self, image, detections):
@@ -160,7 +160,7 @@ index 5f113d1..2ad22c5 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +132,125 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +132,124 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -257,9 +257,8 @@ index 5f113d1..2ad22c5 100644
 +            if video_out_path.exists():
 +                continue
 +
-+            print(f"\n\nshould I preload? {len(files)} > {idx+1}\n\n", file=sys.stderr)
 +            if len(files) > idx+1:
-+                filename = files[idx+1].name
++                filename = files[idx+1].absolute
 +                print(f"\n\nyay, trying to preload {idx+1} at {filename}\n\n", file=sys.stderr)
 +                threading.Thread(target=os.system, args=[f'cat {filename} >/dev/null'])
 +
