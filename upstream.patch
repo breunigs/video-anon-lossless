@@ -1,4 +1,4 @@
-From b938fdb7120720aaa10e6efedd6e1e32ef02cc07 Mon Sep 17 00:00:00 2001
+From ffacaecd0ec84e14d9ea4d64e12827bd53aa9eac Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
@@ -11,7 +11,7 @@ Subject: [PATCH] hack it together
  4 files changed, 257 insertions(+), 66 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..42e3e65 100644
+index 5f113d1..2ad22c5 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,36 @@
@@ -257,10 +257,10 @@ index 5f113d1..42e3e65 100644
 +            if video_out_path.exists():
 +                continue
 +
-+            print(f"should I preload? {len(files)} > {idx+1}\n")
++            print(f"\n\nshould I preload? {len(files)} > {idx+1}\n\n", file=sys.stderr)
 +            if len(files) > idx+1:
 +                filename = files[idx+1].name
-+                print(f"yay, trying to preload {idx+1} at {filename}\n")
++                print(f"\n\nyay, trying to preload {idx+1} at {filename}\n\n", file=sys.stderr)
 +                threading.Thread(target=os.system, args=[f'cat {filename} >/dev/null'])
 +
 +            with tempfile.TemporaryDirectory(prefix=video.name, dir=video.parent) as tmp_dir:
