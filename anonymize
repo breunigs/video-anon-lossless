@@ -12,17 +12,6 @@ cd $(dirname "$0")
 export DOCKER_BUILDKIT=1
 export USER=$(whoami)
 
-if [ ! -f "tensorflow-1.15.5-cp36-cp36m-linux_x86_64.whl" ]; then
-  echo "No local tensorflow cache file, building it (this will take a while)"
-  cd tensorflow
-  docker build -t video-anon:tensorflow .
-  cd ..
-
-  docker create --gpus all --name="tmp_$$" video-anon:tensorflow fakecmd
-  docker export tmp_$$ | tar x --wildcards '*.whl'
-  docker rm tmp_$$
-fi
-
 docker build -t video-anon:runner .
 
 echo "\n\n"

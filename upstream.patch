@@ -1,17 +1,17 @@
-From 6ef603cf53f5bfafb228d84f984444f94504ae15 Mon Sep 17 00:00:00 2001
+From 430ac393e0fb0f2f25ed8d468af79a2862ffa562 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 244 +++++++++++++++++++++----
+ anonymizer/anonymization/anonymizer.py | 246 +++++++++++++++++++++----
  anonymizer/bin/anonymize.py            |  54 +++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 246 insertions(+), 64 deletions(-)
+ 4 files changed, 248 insertions(+), 64 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..e5c7f53 100644
+index 5f113d1..21e991e 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,35 @@
@@ -159,12 +159,16 @@ index 5f113d1..e5c7f53 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +131,117 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +131,119 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
 -        return self.obfuscator.obfuscate(image, detected_boxes), detected_boxes
 +        return detected_boxes
++
++    def blur_and_write(self, frame, frame_detections, writer):
++        frame = self.blur(frame, frame_detections)
++        writer.append_data(frame)
 +
 +    def anonymize_video(self, video_in, detection_thresholds, video_out, json_out_path):
 +        reader: imageio.plugins.ffmpeg.FfmpegFormat.Reader = imageio.get_reader(video_in)
@@ -187,7 +191,7 @@ index 5f113d1..e5c7f53 100644
 +            if not index in detections:
 +                detections[index] = self.anonymize_image(image=frame, detection_thresholds=detection_thresholds)
 +
-+                if index % 10 == 0:
++                if index % 60 == 0:
 +                    if thrJsonSaver != None:
 +                        thrJsonSaver.join()
 +                    thrJsonSaver = threading.Thread(target=save_detections, kwargs=dict(
@@ -199,11 +203,9 @@ index 5f113d1..e5c7f53 100644
 +            if self.need_to_shutdown:
 +                break
 +
-+            frame = self.blur(frame, detections[index])
-+
 +            if thrVideoWriter != None:
 +                thrVideoWriter.join()
-+            thrVideoWriter = threading.Thread(target=writer.append_data, args=[frame])
++            thrVideoWriter = threading.Thread(target=self.blur_and_write, args=[frame, detections[index], writer])
 +            thrVideoWriter.start()
  
 -    def anonymize_images(self, input_path, output_path, detection_thresholds, file_types, write_json):
