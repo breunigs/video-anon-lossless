@@ -1,20 +1,20 @@
-From 3a82fd60451b8c017200dba77f0a6c17f5c31b90 Mon Sep 17 00:00:00 2001
+From bbcfbf1ede0ec4ffa99239bba5fcc4a1869dba81 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 249 +++++++++++++++++++++----
+ anonymizer/anonymization/anonymizer.py | 250 +++++++++++++++++++++----
  anonymizer/bin/anonymize.py            |  54 +++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 251 insertions(+), 64 deletions(-)
+ 4 files changed, 252 insertions(+), 64 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..4be3a5c 100644
+index 5f113d1..5b4468c 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
-@@ -1,14 +1,35 @@
+@@ -1,14 +1,36 @@
 -import json
 -from pathlib import Path
 -
@@ -35,6 +35,7 @@ index 5f113d1..4be3a5c 100644
 +import threading
 +import signal
 +import gzip
++import os
  
  
  def load_np_image(image_path):
@@ -57,7 +58,7 @@ index 5f113d1..4be3a5c 100644
      return np_image
  
  
-@@ -18,24 +39,90 @@ def save_np_image(image, image_path):
+@@ -18,24 +40,90 @@ def save_np_image(image, image_path):
  
  
  def save_detections(detections, detections_path):
@@ -159,7 +160,7 @@ index 5f113d1..4be3a5c 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +131,122 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +132,122 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
