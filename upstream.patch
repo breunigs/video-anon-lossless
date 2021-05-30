@@ -1,4 +1,4 @@
-From 985ba2f6eb9bf4d6c5158248c6adeb1d5f248541 Mon Sep 17 00:00:00 2001
+From 97fe2ccd7c09f23b6f11deac4b6b79ee607e18a8 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
@@ -11,7 +11,7 @@ Subject: [PATCH] hack it together
  4 files changed, 254 insertions(+), 66 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..5b4468c 100644
+index 5f113d1..e4f5461 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,36 @@
@@ -257,7 +257,7 @@ index 5f113d1..5b4468c 100644
 +            if video_out_path.exists():
 +                continue
 +
-+            if len(files) > idx+1:
++            if len(files) < idx+1:
 +                threading.Thread(target=os.system, args=[f'cat {files[idx+1]} >/dev/null'])
 +
 +            with tempfile.TemporaryDirectory(prefix=video.name, dir=video.parent) as tmp_dir:
