@@ -1,14 +1,14 @@
-From bbcfbf1ede0ec4ffa99239bba5fcc4a1869dba81 Mon Sep 17 00:00:00 2001
+From 985ba2f6eb9bf4d6c5158248c6adeb1d5f248541 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
  anonymizer/anonymization/anonymizer.py | 250 +++++++++++++++++++++----
- anonymizer/bin/anonymize.py            |  54 +++---
+ anonymizer/bin/anonymize.py            |  58 +++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 252 insertions(+), 64 deletions(-)
+ 4 files changed, 254 insertions(+), 66 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
 index 5f113d1..5b4468c 100644
@@ -300,7 +300,7 @@ index 5f113d1..5b4468c 100644
 +            if self.need_to_shutdown:
 +                break
 diff --git a/anonymizer/bin/anonymize.py b/anonymizer/bin/anonymize.py
-index 4dbf18c..9372342 100644
+index 4dbf18c..2b61966 100644
 --- a/anonymizer/bin/anonymize.py
 +++ b/anonymizer/bin/anonymize.py
 @@ -21,6 +21,9 @@
@@ -393,13 +393,15 @@ index 4dbf18c..9372342 100644
 +
      anonymizer = Anonymizer(obfuscator=obfuscator, detectors=detectors)
 -    anonymizer.anonymize_images(input_path=input_path, output_path=image_output_path,
-+    anonymizer.anonymize_images(input_path=input_path, all_files=all_files,
-                                 detection_thresholds=detection_thresholds, file_types=image_extensions.split(','),
-                                 write_json=write_json)
- 
+-                                detection_thresholds=detection_thresholds, file_types=image_extensions.split(','),
+-                                write_json=write_json)
++    # anonymizer.anonymize_images(input_path=input_path, all_files=all_files,
++    #                             detection_thresholds=detection_thresholds, file_types=image_extensions.split(','),
++    #                             write_json=write_json)
++
 +    anonymizer.anonymize_videos(input_path=input_path, all_files=all_files,
 +                                detection_thresholds=detection_thresholds, file_types=video_extensions.split(','), write_json=write_json)
-+
+ 
  
  if __name__ == '__main__':
      args = parse_args()
