@@ -1,17 +1,17 @@
-From 5aa3a2ce421b0b66efbb47f723cb48e81bdeb2fe Mon Sep 17 00:00:00 2001
+From b938fdb7120720aaa10e6efedd6e1e32ef02cc07 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 250 +++++++++++++++++++++----
+ anonymizer/anonymization/anonymizer.py | 253 +++++++++++++++++++++----
  anonymizer/bin/anonymize.py            |  58 +++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 254 insertions(+), 66 deletions(-)
+ 4 files changed, 257 insertions(+), 66 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..128e868 100644
+index 5f113d1..42e3e65 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,36 @@
@@ -160,7 +160,7 @@ index 5f113d1..128e868 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +132,122 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +132,125 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -257,8 +257,11 @@ index 5f113d1..128e868 100644
 +            if video_out_path.exists():
 +                continue
 +
++            print(f"should I preload? {len(files)} > {idx+1}\n")
 +            if len(files) > idx+1:
-+                threading.Thread(target=os.system, args=[f'cat {files[idx+1].name} >/dev/null'])
++                filename = files[idx+1].name
++                print(f"yay, trying to preload {idx+1} at {filename}\n")
++                threading.Thread(target=os.system, args=[f'cat {filename} >/dev/null'])
 +
 +            with tempfile.TemporaryDirectory(prefix=video.name, dir=video.parent) as tmp_dir:
 +                tmp_path = Path(tmp_dir) / video_out_path.name
