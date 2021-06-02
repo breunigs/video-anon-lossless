@@ -12,7 +12,7 @@ cd $(dirname "$0")
 export DOCKER_BUILDKIT=1
 export USER=$(whoami)
 
-docker build -t video-anon:runner .
+docker build -t video-anon:runner-gpu .
 
 echo "\n\n"
 cd $wd
@@ -22,8 +22,9 @@ if [ -t 1 ]; then
   extra="--tty"
 fi
 
-docker run -i $extra --rm --name video-anon \
+docker run -i $extra --rm --name video-anon-gpu \
   -u $(id -u ${USER}):$(id -g ${USER}) \
   --gpus all \
   --mount type=bind,source=$(pwd),target=/data \
-  video-anon:runner
+  --mount type=tmpfs,destination=/tmp \
+  video-anon:runner-gpu
