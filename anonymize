@@ -23,7 +23,7 @@ if [ ! -f "tensorflow-1.15.5-cp36-cp36m-linux_x86_64.whl" ]; then
   docker rm tmp_$$
 fi
 
-docker build -t video-anon:runner .
+docker build -t video-anon:runner-cpu .
 
 echo "\n\n"
 cd $wd
@@ -33,7 +33,8 @@ if [ -t 1 ]; then
   extra="--tty"
 fi
 
-docker run -i $extra --rm --name video-anon \
+docker run -i $extra --rm --name video-anon-cpu \
   -u $(id -u ${USER}):$(id -g ${USER}) \
   --mount type=bind,source=$(pwd),target=/data \
-  video-anon:runner
+  --mount type=tmpfs,destination=/tmp \
+  video-anon:runner-cpu
