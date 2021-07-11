@@ -1,17 +1,17 @@
-From 56b032bd354aeb27e7e17f3db40cc71e10341ad4 Mon Sep 17 00:00:00 2001
+From 9ce3f389f590cead4a4ee559167a84834883ce20 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Sat, 10 Apr 2021 16:53:39 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 251 +++++++++++++++++++++----
+ anonymizer/anonymization/anonymizer.py | 255 +++++++++++++++++++++----
  anonymizer/bin/anonymize.py            |  58 +++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 255 insertions(+), 66 deletions(-)
+ 4 files changed, 259 insertions(+), 66 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..081f00e 100644
+index 5f113d1..ff466a2 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,36 @@
@@ -58,7 +58,7 @@ index 5f113d1..081f00e 100644
      return np_image
  
  
-@@ -18,24 +40,90 @@ def save_np_image(image, image_path):
+@@ -18,24 +40,94 @@ def save_np_image(image, image_path):
  
  
  def save_detections(detections, detections_path):
@@ -85,8 +85,12 @@ index 5f113d1..081f00e 100644
 +    if not detections_path.exists():
 +        return detections
 +
-+    with gzip.open(str(detections_path), 'rt') as detection_file:
-+        data = detection_file.read()
++    try:
++        with gzip.open(str(detections_path), 'rt') as detection_file:
++            data = detection_file.read()
++    except:
++        print(f"failed to read {detections_path}")
++        return detections
 +
 +    detections = {}
 +    for index, frame in json.loads(data).items():
@@ -160,7 +164,7 @@ index 5f113d1..081f00e 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +132,123 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +136,123 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
