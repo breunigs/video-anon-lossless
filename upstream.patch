@@ -1,14 +1,14 @@
-From 0a1ff67c875afdd7fb4696faf8dc95ade537371d Mon Sep 17 00:00:00 2001
+From 8ce5c2a6bba322eaffecea3fec841e490d2b3317 Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Mon, 27 Sep 2021 11:26:34 +0200
 Subject: [PATCH] hack it together
 
 ---
  anonymizer/anonymization/anonymizer.py | 236 +++++++++++++++++++++----
- anonymizer/bin/anonymize.py            |  59 +++----
+ anonymizer/bin/anonymize.py            |  57 +++---
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 236 insertions(+), 71 deletions(-)
+ 4 files changed, 234 insertions(+), 71 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
 index 5f113d1..544a2f8 100644
@@ -286,7 +286,7 @@ index 5f113d1..544a2f8 100644
 +            if self.need_to_shutdown:
 +                break
 diff --git a/anonymizer/bin/anonymize.py b/anonymizer/bin/anonymize.py
-index 4dbf18c..8548a90 100644
+index 4dbf18c..d02beb7 100644
 --- a/anonymizer/bin/anonymize.py
 +++ b/anonymizer/bin/anonymize.py
 @@ -21,6 +21,9 @@
@@ -321,7 +321,7 @@ index 4dbf18c..8548a90 100644
                          help='Comma-separated list of file types that will be anonymized')
      parser.add_argument('--face-threshold', type=float, required=False, default=0.3,
                          metavar='0.3',
-@@ -48,40 +50,23 @@ def parse_args():
+@@ -48,40 +50,22 @@ def parse_args():
                          metavar='0.3',
                          help='Detection confidence needed to anonymize a detected license plate. '
                               'Must be in [0.001, 1.0]')
@@ -356,8 +356,7 @@ index 4dbf18c..8548a90 100644
  
 -def main(input_path, image_output_path, weights_path, image_extensions, face_threshold, plate_threshold,
 -         write_json, obfuscation_parameters):
-+def main(input_path, weights_path, image_extensions, video_extensions, face_threshold, plate_threshold,
-+         write_json):
++def main(input_path, weights_path, image_extensions, video_extensions, face_threshold, plate_threshold):
      download_weights(download_directory=weights_path)
  
 -    kernel_size, sigma, box_kernel_size = obfuscation_parameters.split(',')
@@ -365,7 +364,7 @@ index 4dbf18c..8548a90 100644
      detectors = {
          'face': Detector(kind='face', weights_path=get_weights_path(weights_path, kind='face')),
          'plate': Detector(kind='plate', weights_path=get_weights_path(weights_path, kind='plate'))
-@@ -90,15 +75,25 @@ def main(input_path, image_output_path, weights_path, image_extensions, face_thr
+@@ -90,15 +74,24 @@ def main(input_path, image_output_path, weights_path, image_extensions, face_thr
          'face': face_threshold,
          'plate': plate_threshold
      }
@@ -382,8 +381,7 @@ index 4dbf18c..8548a90 100644
 -                                detection_thresholds=detection_thresholds, file_types=image_extensions.split(','),
 -                                write_json=write_json)
 +    # anonymizer.anonymize_images(input_path=input_path, all_files=all_files,
-+    #                             detection_thresholds=detection_thresholds, file_types=image_extensions.split(','),
-+    #                             write_json=write_json)
++    #                             detection_thresholds=detection_thresholds, file_types=image_extensions.split(','))
 +    anonymizer.anonymize_videos(all_files=all_files,
 +                                detection_thresholds=detection_thresholds, file_types=video_extensions.split(','))
  
