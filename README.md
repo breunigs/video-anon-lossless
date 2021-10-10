@@ -1,9 +1,9 @@
-This repo wraps [Understand AI's Anonymizer Tool](https://github.com/understand-ai/anonymizer/) into a Docker container to solve the aging build stack the tool needs. There's additional scripting to automatically blur videos and recompress them losslessly for further editing.
+This repo wraps [Understand AI's Anonymizer Tool](https://github.com/understand-ai/anonymizer/) into a Docker container to solve the aging build stack the tool needs. Additionally it was changed to work with videos and extract their per-frame detections into a `.json.gz` file, which can be applied to the video using e.g. [a custom frei0r ffmpeg filter](https://github.com/breunigs/frei0r-blur-from-json).
+
+The calculation is interruptible, already processed frames are stored in `.json.gz_wip` and moved to `.json.gz` once the video is fully processed.
 
 # Usage
 
 ```bash
-anonymize_video /path/to/videos
+anonymize /path/to/videos
 ```
-
-This will convert all videos in the current directory into lossless, anonymized versions with a `_anonymized.mkv` suffix. Note that you'll need quite a lot of raw disk space because the script keeps all intermediate files until the full conversion is done.

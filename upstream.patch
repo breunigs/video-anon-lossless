@@ -1,17 +1,17 @@
-From 43785d46dd91317be15f4c0c03e2f0bb4c20a4e4 Mon Sep 17 00:00:00 2001
+From 0a1ff67c875afdd7fb4696faf8dc95ade537371d Mon Sep 17 00:00:00 2001
 From: Stefan Breunig <stefan-github@yrden.de>
 Date: Mon, 27 Sep 2021 11:26:34 +0200
 Subject: [PATCH] hack it together
 
 ---
- anonymizer/anonymization/anonymizer.py | 254 +++++++++++++++++++++----
- anonymizer/bin/anonymize.py            |  58 +++---
+ anonymizer/anonymization/anonymizer.py | 236 +++++++++++++++++++++----
+ anonymizer/bin/anonymize.py            |  59 +++----
  anonymizer/detection/detector.py       |   8 +-
  requirements.txt                       |   4 +-
- 4 files changed, 258 insertions(+), 66 deletions(-)
+ 4 files changed, 236 insertions(+), 71 deletions(-)
 
 diff --git a/anonymizer/anonymization/anonymizer.py b/anonymizer/anonymization/anonymizer.py
-index 5f113d1..eaac782 100644
+index 5f113d1..544a2f8 100644
 --- a/anonymizer/anonymization/anonymizer.py
 +++ b/anonymizer/anonymization/anonymizer.py
 @@ -1,14 +1,36 @@
@@ -164,7 +164,7 @@ index 5f113d1..eaac782 100644
  
      def anonymize_image(self, image, detection_thresholds):
          assert set(self.detectors.keys()) == set(detection_thresholds.keys()),\
-@@ -44,28 +136,122 @@ def anonymize_image(self, image, detection_thresholds):
+@@ -44,28 +136,104 @@ def anonymize_image(self, image, detection_thresholds):
          for kind, detector in self.detectors.items():
              new_boxes = detector.detect(image, detection_threshold=detection_thresholds[kind])
              detected_boxes.extend(new_boxes)
@@ -175,7 +175,7 @@ index 5f113d1..eaac782 100644
 +        frame = self.blur(frame, frame_detections)
 +        writer.append_data(frame)
 +
-+    def anonymize_video(self, video_in, detection_thresholds, video_out, json_out_path):
++    def anonymize_video(self, video_in, detection_thresholds, json_out_path):
 +        reader: imageio.plugins.ffmpeg.FfmpegFormat.Reader = imageio.get_reader(video_in)
 +        meta = reader.get_meta_data()
 +        _ = meta['size']
@@ -185,16 +185,11 @@ index 5f113d1..eaac782 100644
 +        if nframes == 0:
 +            nframes = reader.count_frames()
 +
-+        writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer = imageio.get_writer(
-+            video_out, format='FFMPEG', mode='I', fps=meta['fps'], codec="ffv1",
-+            quality=None, output_params=["-movflags", "frag_keyframe+empty_moov"])
-+
 +        bar = tqdm(dynamic_ncols=True, total=nframes, position=1, leave=True, desc=video_in.name)
 +
 +        detections = load_detections(detections_path=json_out_path)
 +
 +        thrJsonSaver = None
-+        thrVideoWriter = None
 +        for index, frame in enumerate(read_iter):
 +            if not index in detections:
 +                detections[index] = self.anonymize_image(image=frame, detection_thresholds=detection_thresholds)
@@ -207,29 +202,21 @@ index 5f113d1..eaac782 100644
 +                        detections_path=json_out_path
 +                    ))
 +                    thrJsonSaver.start()
-+
-+            if self.need_to_shutdown:
-+                break
-+
-+            if thrVideoWriter != None:
-+                thrVideoWriter.join()
-+            thrVideoWriter = threading.Thread(target=self.blur_and_write, args=[frame, detections[index], writer])
-+            thrVideoWriter.start()
  
 -    def anonymize_images(self, input_path, output_path, detection_thresholds, file_types, write_json):
 -        print(f'Anonymizing images in {input_path} and saving the anonymized images to {output_path}...')
-+            bar.update()
++            if self.need_to_shutdown:
++                break
  
 -        Path(output_path).mkdir(exist_ok=True)
 -        assert Path(output_path).is_dir(), 'Output path must be a directory'
++            bar.update()
+ 
 +        if thrJsonSaver != None:
 +            thrJsonSaver.join()
-+        if thrVideoWriter != None:
-+            thrVideoWriter.join()
 +        save_detections(detections=detections, detections_path=json_out_path)
-+        writer.close()
 +        bar.close()
- 
++
 +    def filter_files(self, all_files, file_types, suffix):
          files = []
 -        for file_type in file_types:
@@ -244,6 +231,23 @@ index 5f113d1..eaac782 100644
 +            files.append(Path(file))
 +        files.sort()
 +        return files
++
++    def anonymize_videos(self, detection_thresholds, all_files, file_types):
++        files = self.filter_files(all_files, file_types, ".json.gz")
++        bar = tqdm(dynamic_ncols=True, total=len(files), position=0, leave=True, desc="Videos")
++
++        for idx, video in enumerate(files):
++            bar.update()
++
++            json_out_path = video.with_name(f"{video.name}.json.gz")
++            json_out_path_wip = video.with_name(f'{video.name}.json.gz_wip')
++
++            if json_out_path.exists():
++                continue
++
++            self.anonymize_video(video, detection_thresholds, json_out_path_wip)
++            if self.need_to_shutdown:
++                break
  
 -        for input_image_path in tqdm(files):
 -            # Create output directory
@@ -251,29 +255,7 @@ index 5f113d1..eaac782 100644
 -            (Path(output_path) / relative_path.parent).mkdir(exist_ok=True, parents=True)
 -            output_image_path = Path(output_path) / relative_path
 -            output_detections_path = (Path(output_path) / relative_path).with_suffix('.json')
-+    def anonymize_videos(self, input_path, detection_thresholds, all_files, file_types, write_json):
-+        files = self.filter_files(all_files, file_types, ".anonymized.mkv")
-+        bar = tqdm(dynamic_ncols=True, total=len(files), position=0, leave=True, desc="Videos")
-+
-+        for idx, video in enumerate(files):
-+            bar.update()
-+
-+            video_out_path = video.with_name(f"{video.name}.anonymized.mkv")
-+            json_out_path = video.with_name(f'{video.name}.json.gz')
-+
-+            if video_out_path.exists():
-+                continue
-+
-+            with tempfile.TemporaryDirectory(prefix=video.name, dir=video.parent) as tmp_dir:
-+                tmp_path = Path(tmp_dir) / video_out_path.name
-+                self.anonymize_video(video, detection_thresholds, tmp_path, json_out_path)
-+                if self.need_to_shutdown:
-+                    break
-+
-+                tmp_path.rename(video_out_path)
-+
-+            if not write_json:
-+                os.remove(json_out_path)
++            json_out_path_wip.rename(json_out_path)
 +
 +        bar.close()
 +
@@ -304,7 +286,7 @@ index 5f113d1..eaac782 100644
 +            if self.need_to_shutdown:
 +                break
 diff --git a/anonymizer/bin/anonymize.py b/anonymizer/bin/anonymize.py
-index 4dbf18c..2b61966 100644
+index 4dbf18c..8548a90 100644
 --- a/anonymizer/bin/anonymize.py
 +++ b/anonymizer/bin/anonymize.py
 @@ -21,6 +21,9 @@
@@ -339,10 +321,13 @@ index 4dbf18c..2b61966 100644
                          help='Comma-separated list of file types that will be anonymized')
      parser.add_argument('--face-threshold', type=float, required=False, default=0.3,
                          metavar='0.3',
-@@ -51,37 +53,24 @@ def parse_args():
-     parser.add_argument('--write-detections', dest='write_detections', action='store_true')
-     parser.add_argument('--no-write-detections', dest='write_detections', action='store_false')
-     parser.set_defaults(write_detections=True)
+@@ -48,40 +50,23 @@ def parse_args():
+                         metavar='0.3',
+                         help='Detection confidence needed to anonymize a detected license plate. '
+                              'Must be in [0.001, 1.0]')
+-    parser.add_argument('--write-detections', dest='write_detections', action='store_true')
+-    parser.add_argument('--no-write-detections', dest='write_detections', action='store_false')
+-    parser.set_defaults(write_detections=True)
 -    parser.add_argument('--obfuscation-kernel', required=False, default='21,2,9',
 -                        metavar='kernel_size,sigma,box_kernel_size',
 -                        help='This parameter is used to change the way the blurring is done. '
@@ -362,7 +347,7 @@ index 4dbf18c..2b61966 100644
 +    print(f'video-extensions: {args.video_extensions}')
      print(f'face-threshold: {args.face_threshold}')
      print(f'plate-threshold: {args.plate_threshold}')
-     print(f'write-detections: {args.write_detections}')
+-    print(f'write-detections: {args.write_detections}')
 -    print(f'obfuscation-kernel: {args.obfuscation_kernel}')
      print()
  
@@ -380,7 +365,7 @@ index 4dbf18c..2b61966 100644
      detectors = {
          'face': Detector(kind='face', weights_path=get_weights_path(weights_path, kind='face')),
          'plate': Detector(kind='plate', weights_path=get_weights_path(weights_path, kind='plate'))
-@@ -90,15 +79,30 @@ def main(input_path, image_output_path, weights_path, image_extensions, face_thr
+@@ -90,15 +75,25 @@ def main(input_path, image_output_path, weights_path, image_extensions, face_thr
          'face': face_threshold,
          'plate': plate_threshold
      }
@@ -391,9 +376,6 @@ index 4dbf18c..2b61966 100644
 +    for (dirpath, dirnames, filenames) in os.walk(input_path):
 +        for file in filenames:
 +            all_files[os.path.join(dirpath, file)] = True
-+        for dirname in dirnames:
-+            if dirname.endswith("_jsons"):
-+                dirnames.remove(dirname)
 +
      anonymizer = Anonymizer(obfuscator=obfuscator, detectors=detectors)
 -    anonymizer.anonymize_images(input_path=input_path, output_path=image_output_path,
@@ -402,9 +384,8 @@ index 4dbf18c..2b61966 100644
 +    # anonymizer.anonymize_images(input_path=input_path, all_files=all_files,
 +    #                             detection_thresholds=detection_thresholds, file_types=image_extensions.split(','),
 +    #                             write_json=write_json)
-+
-+    anonymizer.anonymize_videos(input_path=input_path, all_files=all_files,
-+                                detection_thresholds=detection_thresholds, file_types=video_extensions.split(','), write_json=write_json)
++    anonymizer.anonymize_videos(all_files=all_files,
++                                detection_thresholds=detection_thresholds, file_types=video_extensions.split(','))
  
  
  if __name__ == '__main__':
@@ -412,10 +393,10 @@ index 4dbf18c..2b61966 100644
 -    main(input_path=args.input, image_output_path=args.image_output, weights_path=args.weights,
 +    main(input_path=args.input, weights_path=args.weights,
           image_extensions=args.image_extensions,
-+         video_extensions=args.video_extensions,
-          face_threshold=args.face_threshold, plate_threshold=args.plate_threshold,
+-         face_threshold=args.face_threshold, plate_threshold=args.plate_threshold,
 -         write_json=args.write_detections, obfuscation_parameters=args.obfuscation_kernel)
-+         write_json=args.write_detections)
++         video_extensions=args.video_extensions,
++         face_threshold=args.face_threshold, plate_threshold=args.plate_threshold)
 diff --git a/anonymizer/detection/detector.py b/anonymizer/detection/detector.py
 index 56ce2e5..6b5f135 100644
 --- a/anonymizer/detection/detector.py
