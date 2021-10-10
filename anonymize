@@ -1,5 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 
+SCRIPT_DIR=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 
 if [ -n "$1" ]; then
   cd "$1"
@@ -7,14 +8,14 @@ fi
 wd=$(pwd)
 
 set -eu
-cd $(dirname "$0")
+cd $SCRIPT_DIR
 
 export DOCKER_BUILDKIT=1
 export USER=$(whoami)
 
 docker build -t video-anon:runner-gpu .
 
-echo "\n\n"
+echo -e "\n\n"
 cd $wd
 
 extra=""
