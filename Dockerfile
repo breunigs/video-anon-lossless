@@ -39,5 +39,4 @@ RUN cd anonymizer && git apply /app/upstream.patch
 ENTRYPOINT ["nice", "-n20", "python3", \
   "/app/anonymizer/anonymizer/bin/anonymize.py", \
   "--weights", "/anonymizer-weights-cache", \
-  "--input", "/data", \
-  "--write-detections"]
+  "--input", "/data"]
