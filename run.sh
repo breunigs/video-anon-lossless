@@ -11,9 +11,14 @@ banner() {
 
 if [ "${IN_DOCKER:-0}" = "1" ]; then
   banner "Detecting…"
-  nice -n 19 -- /detector.py /workdir/weights.pt /workdir/in/
+  weights=$(dirname "${BASH_SOURCE[0]}")/weights.pt
+  nice -n 19 -- /detector.py "${weights}" /workdir/in/
 
   shopt -s globstar
+  if [ "${OWNER_GROUP_FIX:-}" != "" ]; then
+    chown "${OWNER_GROUP_FIX}" /workdir/in/**/*.json.gz
+  fi
+
   FILES=(/workdir/in/**/*.json.gz)
   for jsongz in $FILES
   do
@@ -29,6 +34,9 @@ if [ "${IN_DOCKER:-0}" = "1" ]; then
       -c:v ffv1 \
       -c:a copy \
       "${videoout}.mkv"
+    if [ "${OWNER_GROUP_FIX:-}" != "" ]; then
+      chown "${OWNER_GROUP_FIX}" "${videoout}.mkv"
+    fi
   done
 else
   DOCKER_BUILDKIT=1
@@ -36,7 +44,7 @@ else
 
   banner "Building…"
   docker build -t "${NAME}" .
-  docker run -it --mount "type=bind,source=$(pwd),target=/workdir" "${NAME}"
+  docker run -it -e  "OWNER_GROUP_FIX=$(id -u):$(id -g)" --mount "type=bind,source=$(pwd),target=/workdir" "${NAME}"
 fi
 
 

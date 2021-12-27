@@ -101,7 +101,8 @@ COPY run.sh /run.sh
 # work around https://github.com/pytorch/pytorch/issues/67598
 RUN sed -i "s/if torch.cuda.amp.common.amp_definitely_not_available() and self.device == 'cuda':/if enabled and torch.cuda.amp.common.amp_definitely_not_available() and self.device == 'cuda':/" /usr/local/lib/python3.9/dist-packages/torch/autocast_mode.py
 
-ENV FREI0R_PATH=/root/.frei0r-1/lib/
+COPY weights.pt /weights.pt
+
 ENV IN_DOCKER=1
 ENTRYPOINT ["/bin/bash"]
 CMD ["/run.sh"]

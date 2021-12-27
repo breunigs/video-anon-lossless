@@ -2,4 +2,3 @@
 .gitignore
 in/
 out/
-weights.pt
