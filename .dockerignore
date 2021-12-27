@@ -1,0 +1,5 @@
+.git/
+.gitignore
+in/
+out/
+weights.pt
