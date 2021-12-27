@@ -15,6 +15,34 @@ from these repos:
 
 # Usage
 
+1. [Install Docker]()
+2. Create the following folder structure:
+   ```
+   some-folder/
+   some-folder/in/
+   some-folder/in/my-video1.MP4
+   some-folder/in/my-video2.mkv
+   some-folder/out/
+   ```
+   Only `.MP4` and `.mkv` video files are supported. The file endings are case
+   sensitive.
+3. Open a terminal and run:
+
+   ```bash
+   # Linux/Mac
+   cd some-folder/
+   docker run -it \
+     -e "OWNER_GROUP_FIX=$(id -u):$(id -g)" \
+     --mount "type=bind,source=$(pwd),target=/workdir" \
+     "ghcr.io/breunigs/video-anon-lossless:yolov5-cpu"
+   ```
+4. The detections will be put along the videos in `some-folder/in/`,
+   the blurred and _lossless_ videos in `some-folder/out/`. You'll
+   need to convert the video again to be usable, but simply uploading
+   it to YouTube, Vimeo, etc. will just work fine.
+
+# Usage and Building Details
+
 On Linux, ensure Docker is installed, then simply run `run.sh`. It will
 automatically build and run the container.
 
@@ -34,3 +62,11 @@ across GoPro metadata.
 The resulting video files will be quite large since the video is stored
 losslessly. It's likely that the video will not play fluently. Either change the
 parameters in `run.sh` or use other software to further adjust as desired.
+
+# Debugging
+
+The way the container is set up, you can run it through
+```bash
+docker run -it … <image-name> -i
+```
+to get a shell. See `run.sh` for the other parameters.
