@@ -57,6 +57,7 @@ RUN apt-get update --yes \
   ca-certificates \
   curl \
   && rm -rf /var/lib/apt/lists/*
+RUN curl -L https://www.breunig.xyz/share/weights.pt > /weights.pt
 RUN curl -L https://raw.githubusercontent.com/breunigs/veloroute/${VELO_GIT_SHA}/tools/detection/detector.py > /detector.py \
   && chmod +x /detector.py
 
@@ -95,13 +96,12 @@ RUN pip install -r /root/.cache/torch/hub/ultralytics_yolov5_master/requirements
   && rm -rf /root/.cache/pip
 
 COPY --from=blur /build/jsonblur.so /root/.frei0r-1/lib/
+COPY --from=detector /weights.pt /weights.pt
 COPY --from=detector /detector.py /detector.py
 COPY run.sh /run.sh
 
 # work around https://github.com/pytorch/pytorch/issues/67598
 RUN sed -i "s/if torch.cuda.amp.common.amp_definitely_not_available() and self.device == 'cuda':/if enabled and torch.cuda.amp.common.amp_definitely_not_available() and self.device == 'cuda':/" /usr/local/lib/python3.9/dist-packages/torch/autocast_mode.py
-
-COPY weights.pt /weights.pt
 
 ENV IN_DOCKER=1
 ENTRYPOINT ["/bin/bash"]
